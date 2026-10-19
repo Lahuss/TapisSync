@@ -1,8 +1,14 @@
-# Compile l'APK automatiquement sur GitHub (onglet Actions → dernier build → Artifacts).
+# Compile l'APK automatiquement sur GitHub.
+# Résultat : onglet Actions → dernier build → Artifacts, et branche « build-output » (APK + journaux).
 name: Build APK
 on:
   push:
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -15,8 +21,24 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.14.3
-      - run: gradle --no-daemon testReleaseUnitTest assembleRelease
+      - name: Tests et compilation
+        run: gradle --no-daemon testReleaseUnitTest assembleRelease 2>&1 | tee build.log
       - uses: actions/upload-artifact@v4
+        if: success()
         with:
           name: TapisSync-apk
           path: app/build/outputs/apk/release/*.apk
+      - name: Publier l'APK et les journaux sur la branche build-output
+        if: always()
+        run: |
+          mkdir -p out
+          cp app/build/outputs/apk/release/*.apk out/TapisSync.apk 2>/dev/null || true
+          cp -r app/build/test-results/testReleaseUnitTest out/tests 2>/dev/null || true
+          cp build.log out/ 2>/dev/null || true
+          echo "${GITHUB_SHA}" > out/commit.txt
+          cd out
+          git init -q
+          git checkout -q -b build-output
+          git add -A
+          git -c user.name="github-actions" -c user.email="actions@github.com" commit -q -m "Build ${GITHUB_SHA::7}"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" build-output
