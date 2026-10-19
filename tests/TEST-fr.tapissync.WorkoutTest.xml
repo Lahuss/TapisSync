@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="fr.tapissync.WorkoutTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-19T15:03:21.527Z" hostname="runnervm8k3b6" time="0.013">
+  <properties/>
+  <testcase name="reversedAndSingleValueTargets" classname="fr.tapissync.WorkoutTest" time="0.002"/>
+  <testcase name="parsesAndExpandsRepeats" classname="fr.tapissync.WorkoutTest" time="0.007"/>
+  <testcase name="estimates" classname="fr.tapissync.WorkoutTest" time="0.002"/>
+  <testcase name="correctionAndMachineLimits" classname="fr.tapissync.WorkoutTest" time="0.001"/>
+  <testcase name="paceRangeMiddleIsMiddleOfPace" classname="fr.tapissync.WorkoutTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
