@@ -22,6 +22,7 @@ jobs:
         with:
           gradle-version: 8.14.3
       - name: Tests et compilation
+        shell: bash
         run: gradle --no-daemon assembleRelease testReleaseUnitTest --continue 2>&1 | tee build.log
       - uses: actions/upload-artifact@v4
         if: always()

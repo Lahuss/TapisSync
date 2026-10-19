@@ -166,8 +166,8 @@ object Ui {
         setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
         typeface = when {
             mono -> Typeface.MONOSPACE
-            bold -> bodyMedium
-            else -> body
+            bold -> Ui.bodyMedium
+            else -> Ui.body
         }
         setLineSpacing(0f, 1.2f)
     }
@@ -178,7 +178,7 @@ object Ui {
             text = s
             setTextColor(color)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
-            typeface = display
+            typeface = Ui.display
             includeFontPadding = false
             letterSpacing = -0.01f
             if (glow) setShadowLayer(dp(ctx, 14).toFloat(), 0f, 0f, 0xAAFF6A00.toInt())
@@ -190,7 +190,7 @@ object Ui {
             text = s
             setTextColor(color)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
-            typeface = label
+            typeface = Ui.label
         }
 
     /** Ligne d'état précédée d'une pastille de couleur (connecté, attente, erreur). */
@@ -352,7 +352,7 @@ object Ui {
             setTextColor(TEXT)
             setHintTextColor(MUTED)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
-            typeface = label
+            typeface = Ui.label
             var type = InputType.TYPE_CLASS_NUMBER
             if (decimals) type = type or InputType.TYPE_NUMBER_FLAG_DECIMAL
             if (signed) type = type or InputType.TYPE_NUMBER_FLAG_SIGNED
