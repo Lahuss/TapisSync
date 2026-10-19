@@ -20,6 +20,7 @@ class SettingsActivity : Activity() {
     private lateinit var seek: SeekBar
     private lateinit var seekLabel: TextView
     private lateinit var example: TextView
+    private val presetButtons = mutableListOf<Pair<android.widget.Button, Int>>()
     private lateinit var correction: EditText
     private lateinit var warmup: EditText
     private lateinit var active: EditText
@@ -57,7 +58,9 @@ class SettingsActivity : Activity() {
         val presets = Ui.horizontal(this)
         listOf("Lent" to 0, "Milieu" to 50, "Rapide" to 100).forEachIndexed { i, (label, v) ->
             if (i > 0) presets.addView(android.view.View(this), Ui.lp(Ui.dp(this, 8), 1))
-            presets.addView(Ui.button(this, label, primary = false) { seek.progress = v }, Ui.lp(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            val b = Ui.button(this, label, primary = false) { seek.progress = v }
+            presetButtons += b to v
+            presets.addView(b, Ui.lp(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         }
         c1.addSpaced(presets, this, 8)
         example = Ui.text(this, "", 14f, Ui.MUTED)
@@ -131,6 +134,7 @@ class SettingsActivity : Activity() {
 
     private fun updateExample() {
         val pos = seek.progress / 100.0
+        presetButtons.forEach { (b, v) -> Ui.styleTab(b, seek.progress == v) }
         seekLabel.text = when (seek.progress) {
             0 -> "Bout lent de la plage"
             50 -> "Milieu de la plage"
