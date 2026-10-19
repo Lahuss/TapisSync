@@ -30,7 +30,6 @@ class SettingsActivity : Activity() {
     private lateinit var maxKmh: EditText
     private lateinit var endKmh: EditText
     private lateinit var incline: EditText
-    private lateinit var cadence: EditText
     private lateinit var voice: Switch
     private lateinit var beep: Switch
 
@@ -41,7 +40,7 @@ class SettingsActivity : Activity() {
 
         // Position dans la plage
         val c1 = Ui.card(this)
-        c1.addView(Ui.text(this, "Où viser dans la plage d'allure", 17f, bold = true))
+        c1.addView(Ui.label(this, "Où viser dans la plage d'allure", 21f))
         c1.addSpaced(Ui.text(this, "Garmin donne une plage (ex. 4:40–4:50 /km). Choisis où l'appli se place dedans.", 14f, Ui.MUTED), this, 4)
         seekLabel = Ui.text(this, "", 15f, Ui.ACCENT, bold = true)
         c1.addSpaced(seekLabel, this, 10)
@@ -67,7 +66,7 @@ class SettingsActivity : Activity() {
 
         // Correction
         val c2 = Ui.card(this)
-        c2.addView(Ui.text(this, "Correction de vitesse (%)", 17f, bold = true))
+        c2.addView(Ui.label(this, "Correction de vitesse (%)", 21f))
         c2.addSpaced(Ui.text(this, "Si ta montre mesure une allure plus lente que celle du tapis, mets par exemple +2. S'applique seulement aux étapes avec une allure Garmin.", 14f, Ui.MUTED), this, 4)
         correction = Ui.numberField(this, s.correctionPct, signed = true)
         c2.addSpaced(correction, this, 8)
@@ -75,7 +74,7 @@ class SettingsActivity : Activity() {
 
         // Vitesses par défaut
         val c3 = Ui.card(this)
-        c3.addView(Ui.text(this, "Vitesses sans cible d'allure (km/h)", 17f, bold = true))
+        c3.addView(Ui.label(this, "Vitesses sans cible d'allure (km/h)", 21f))
         c3.addSpaced(Ui.text(this, "Utilisées pour les étapes Garmin sans allure (cible cardio, aucune cible…).", 14f, Ui.MUTED), this, 4)
         warmup = field(c3, "Échauffement", s.warmupKmh)
         active = field(c3, "Course", s.activeKmh)
@@ -86,22 +85,12 @@ class SettingsActivity : Activity() {
 
         // Sécurité
         val c4 = Ui.card(this)
-        c4.addView(Ui.text(this, "Sécurité et fin de séance", 17f, bold = true))
+        c4.addView(Ui.label(this, "Sécurité et fin de séance", 21f))
         minKmh = field(c4, "Vitesse minimale (km/h)", s.minKmh)
         maxKmh = field(c4, "Vitesse maximale (km/h)", s.maxKmh)
         endKmh = field(c4, "Marche après la séance (km/h, 0 = arrêt)", prefs.endSpeedKmh)
         incline = field(c4, "Pente au départ (%, vide = ne pas toucher)", prefs.startInclinePct, signed = true)
         root.addSpaced(c4, this, 12)
-
-        // Capteur de foulée
-        val c6 = Ui.card(this)
-        c6.addView(Ui.text(this, "Capteur de foulée pour la montre", 17f, bold = true))
-        c6.addSpaced(
-            Ui.text(this, "Le tapis ne mesure pas ta cadence. 0 = cadence nulle envoyée ; tu peux mettre une valeur fixe (ex. 170) si la montre affiche une cadence à zéro.", 14f, Ui.MUTED),
-            this, 4,
-        )
-        cadence = field(c6, "Cadence envoyée (pas/min)", prefs.footpodCadence.toDouble(), decimals = false)
-        root.addSpaced(c6, this, 12)
 
         // Sons
         val c5 = Ui.card(this)
@@ -178,7 +167,6 @@ class SettingsActivity : Activity() {
         }
         val end = num(endKmh, "Marche", 0.0, 8.0) ?: return false
         val inc = if (incline.text.isNullOrBlank()) Double.NaN else (num(incline, "Pente", -5.0, 20.0) ?: return false)
-        val cad = num(cadence, "Cadence", 0.0, 250.0) ?: return false
         prefs.speedSettings = SpeedSettings(
             rangePosition = seek.progress / 100.0,
             correctionPct = corr,
@@ -189,8 +177,6 @@ class SettingsActivity : Activity() {
         prefs.startInclinePct = inc
         prefs.voiceEnabled = voice.isChecked
         prefs.beepEnabled = beep.isChecked
-        prefs.footpodCadence = Math.round(cad).toInt()
-        App.instance.footpod.cadence = prefs.footpodCadence
         return true
     }
 }

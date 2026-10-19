@@ -145,6 +145,13 @@ object SpeedPlanner {
         else -> "${Math.round(p * 100)} % vers le rapide"
     }
 
+    /** Durée estimée d'une étape (s) pour dessiner le profil : 60 s pour une étape manuelle. */
+    fun stepSeconds(p: PlannedStep): Double = when (val e = p.step.end) {
+        is EndCondition.Time -> e.seconds
+        is EndCondition.Distance -> if (p.speedKmh > 0.1) e.meters / (p.speedKmh / 3.6) else 60.0
+        is EndCondition.Manual -> 60.0
+    }.coerceAtLeast(1.0)
+
     /** Durée estimée de la séance, en secondes. */
     fun estimatedSeconds(steps: List<PlannedStep>): Double = steps.sumOf { p ->
         when (val e = p.step.end) {

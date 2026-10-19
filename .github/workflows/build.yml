@@ -22,9 +22,9 @@ jobs:
         with:
           gradle-version: 8.14.3
       - name: Tests et compilation
-        run: gradle --no-daemon testReleaseUnitTest assembleRelease 2>&1 | tee build.log
+        run: gradle --no-daemon assembleRelease testReleaseUnitTest --continue 2>&1 | tee build.log
       - uses: actions/upload-artifact@v4
-        if: success()
+        if: always()
         with:
           name: TapisSync-apk
           path: app/build/outputs/apk/release/*.apk
@@ -34,6 +34,7 @@ jobs:
           mkdir -p out
           cp app/build/outputs/apk/release/*.apk out/TapisSync.apk 2>/dev/null || true
           cp -r app/build/test-results/testReleaseUnitTest out/tests 2>/dev/null || true
+          cp -r app/build/screens out/screens 2>/dev/null || true
           cp build.log out/ 2>/dev/null || true
           echo "${GITHUB_SHA}" > out/commit.txt
           cd out

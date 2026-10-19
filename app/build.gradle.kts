@@ -13,8 +13,8 @@ android {
         applicationId = "fr.tapissync"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 4
+        versionName = "1.3"
     }
 
     signingConfigs {
@@ -43,6 +43,10 @@ android {
         checkReleaseBuilds = false
     }
 
+    testOptions {
+        // Ressources Android disponibles pour les captures d'écran faites par Robolectric.
+        unitTests.isIncludeAndroidResources = true
+    }
 }
 
 kotlin {
@@ -55,4 +59,6 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     // org.json réel pour les tests JVM (celui d'Android n'existe qu'à l'exécution sur l'appareil).
     testImplementation("org.json:json:20240303")
+    // Rendu des écrans sur la machine de compilation, pour vérifier le design.
+    testImplementation("org.robolectric:robolectric:4.14.1")
 }

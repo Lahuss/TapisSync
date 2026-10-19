@@ -12,6 +12,7 @@ import android.util.Rational
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
@@ -25,7 +26,10 @@ import fr.tapissync.run.WorkoutService
 import fr.tapissync.ui.Ui.addSpaced
 import fr.tapissync.workout.Format
 
-/** Écran de séance. Passe en mode incrusté (PiP) quand tu ouvres Netflix ou une autre appli. */
+/**
+ * Écran de séance, lisible en courant : vitesse géante façon LED, temps restant,
+ * profil de la séance. Passe en fenêtre incrustée quand tu ouvres une autre appli.
+ */
 class RunActivity : Activity(), RunSession.Listener {
 
     private val app get() = App.instance
@@ -33,7 +37,7 @@ class RunActivity : Activity(), RunSession.Listener {
     private var inPip = false
 
     private lateinit var stepLabel: TextView
-    private lateinit var totals: TextView
+    private lateinit var stepCount: TextView
     private lateinit var notice: TextView
     private lateinit var target: TextView
     private lateinit var targetUnit: TextView
@@ -42,13 +46,19 @@ class RunActivity : Activity(), RunSession.Listener {
     private lateinit var remaining: TextView
     private lateinit var remainingLabel: TextView
     private lateinit var progress: ProgressBar
+    private lateinit var profile: LedProfileView
+    private lateinit var elapsedStat: TextView
+    private lateinit var distanceStat: TextView
     private lateinit var nextLine: TextView
     private lateinit var controls: LinearLayout
     private lateinit var startBox: LinearLayout
     private lateinit var endBox: LinearLayout
     private lateinit var endSummary: TextView
     private lateinit var pauseButton: Button
-    private lateinit var header: LinearLayout
+
+    /** Éléments masqués en fenêtre incrustée. */
+    private val fullOnly = mutableListOf<View>()
+    private var wideLayout = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,85 +71,146 @@ class RunActivity : Activity(), RunSession.Listener {
         buildUi()
     }
 
-    private fun buildUi() {
-        val scroll = ScrollView(this).apply { setBackgroundColor(Ui.BG); isFillViewport = true }
-        val root = Ui.vertical(this).apply {
-            val p = Ui.dp(this@RunActivity, 16)
-            setPadding(p, p, p, p)
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // Rotation ou redimensionnement : on reconstruit la mise en page sans quitter l'écran.
+        if (inPip || session == null) return
+        val wide = isWideNow()
+        if (wide != wideLayout) {
+            buildUi()
+            onUpdate()
         }
+    }
+
+    private fun isWideNow(): Boolean {
+        val c = resources.configuration
+        return c.orientation == Configuration.ORIENTATION_LANDSCAPE && c.screenWidthDp >= 600
+    }
+
+    private fun buildUi() {
+        fullOnly.clear()
+        wideLayout = isWideNow()
+        val pad = Ui.dp(this, if (wideLayout) 28 else 18)
+
+        val scroll = ScrollView(this).apply { setBackgroundColor(Ui.BG); isFillViewport = true }
+        val root = Ui.vertical(this).apply { setPadding(pad, pad, pad, pad) }
         scroll.addView(root)
         setContentView(scroll)
 
-        header = Ui.horizontal(this)
-        stepLabel = Ui.text(this, "", 18f, bold = true)
-        header.addView(stepLabel, Ui.lp(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        totals = Ui.text(this, "", 14f, Ui.MUTED).apply { gravity = Gravity.END }
-        header.addView(totals)
-        root.addView(header)
+        // Bandeau : étape en cours
+        val top = Ui.horizontal(this)
+        stepLabel = Ui.label(this, "", if (wideLayout) 30f else 24f, Ui.ACCENT)
+        top.addView(stepLabel, Ui.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        stepCount = Ui.label(this, "", if (wideLayout) 22f else 18f, Ui.MUTED)
+        top.addView(stepCount)
+        root.addView(top)
+        fullOnly += top
 
-        notice = Ui.text(this, "", 15f, Ui.WARN).apply { visibility = View.GONE }
-        root.addSpaced(notice, this, 8)
+        notice = Ui.label(this, "", 20f, Ui.WARN).apply { visibility = View.GONE }
+        root.addSpaced(notice, this, 6)
+        fullOnly += notice
 
-        val targetRow = Ui.horizontal(this).apply { gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL }
-        target = Ui.text(this, "--", 96f, Ui.ACCENT, bold = true, mono = true)
-        targetUnit = Ui.text(this, " km/h", 24f, Ui.MUTED)
-        targetRow.addView(target)
-        targetRow.addView(targetUnit)
-        root.addSpaced(targetRow, this, 8)
+        // Vitesse cible
+        val speedBox = Ui.vertical(this).apply { gravity = Gravity.CENTER_HORIZONTAL }
+        val speedRow = Ui.horizontal(this).apply { gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL }
+        target = Ui.display(this, "--", if (wideLayout) 190f else 128f, Ui.ACCENT, glow = true)
+        targetUnit = Ui.label(this, " km/h", if (wideLayout) 34f else 26f, Ui.MUTED).apply {
+            setPadding(0, 0, 0, Ui.dp(this@RunActivity, if (wideLayout) 26 else 18))
+        }
+        speedRow.addView(target)
+        speedRow.addView(targetUnit)
+        speedBox.addView(speedRow)
+        pace = Ui.display(this, "", if (wideLayout) 40f else 32f, Ui.TEXT)
+        speedBox.addView(pace)
+        actual = Ui.text(this, "", 17f, Ui.MUTED).apply { gravity = Gravity.CENTER_HORIZONTAL }
+        speedBox.addSpaced(actual, this, 6)
+        fullOnly += actual
 
-        pace = Ui.text(this, "", 22f, Ui.TEXT).apply { gravity = Gravity.CENTER_HORIZONTAL }
-        root.addView(pace, Ui.lp())
-        actual = Ui.text(this, "", 15f, Ui.MUTED).apply { gravity = Gravity.CENTER_HORIZONTAL }
-        root.addView(actual, Ui.lp())
-
-        remaining = Ui.text(this, "", 64f, Ui.TEXT, bold = true, mono = true).apply { gravity = Gravity.CENTER_HORIZONTAL }
-        root.addSpaced(remaining, this, 16)
-        remainingLabel = Ui.text(this, "", 15f, Ui.MUTED).apply { gravity = Gravity.CENTER_HORIZONTAL }
-        root.addView(remainingLabel, Ui.lp())
-
+        // Temps ou distance restante
+        val restBox = Ui.vertical(this).apply { gravity = Gravity.CENTER_HORIZONTAL }
+        remaining = Ui.display(this, "", if (wideLayout) 120f else 88f, Ui.TEXT)
+        restBox.addView(remaining)
+        remainingLabel = Ui.text(this, "", 17f, Ui.MUTED).apply { gravity = Gravity.CENTER_HORIZONTAL }
+        restBox.addView(remainingLabel)
+        fullOnly += remainingLabel
         progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 1000
             progressTintList = ColorStateList.valueOf(Ui.ACCENT)
-            progressBackgroundTintList = ColorStateList.valueOf(Ui.SURFACE_2)
+            progressBackgroundTintList = ColorStateList.valueOf(Ui.LED_OFF)
         }
-        root.addSpaced(progress, this, 12, Ui.lp(LinearLayout.LayoutParams.MATCH_PARENT, Ui.dp(this, 10)))
+        restBox.addSpaced(progress, this, 12, Ui.lp(ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(this, 10)))
+        fullOnly += progress
 
-        nextLine = Ui.text(this, "", 16f, Ui.MUTED)
-        root.addSpaced(nextLine, this, 12)
+        // Profil et totaux
+        val infoBox = Ui.vertical(this)
+        profile = LedProfileView(this, rows = if (wideLayout) 12 else 9)
+        session?.let { profile.setPlan(it.engine.steps) }
+        infoBox.addView(profile)
+        val totals = Ui.horizontal(this).apply { gravity = Gravity.TOP }
+        val elapsedBlock = Ui.stat(this, "0:00", "temps écoulé")
+        val distanceBlock = Ui.stat(this, "0 m", "distance")
+        elapsedStat = elapsedBlock.getChildAt(0) as TextView
+        distanceStat = distanceBlock.getChildAt(0) as TextView
+        totals.addView(elapsedBlock, Ui.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        totals.addView(distanceBlock, Ui.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        infoBox.addSpaced(totals, this, 14)
+        nextLine = Ui.text(this, "", 17f, Ui.TEXT)
+        infoBox.addSpaced(nextLine, this, 12)
+        fullOnly += infoBox
+
+        if (wideLayout) {
+            val main = Ui.horizontal(this).apply { gravity = Gravity.CENTER_VERTICAL }
+            main.addView(speedBox, Ui.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.15f))
+            val rightCol = Ui.vertical(this)
+            rightCol.addView(restBox)
+            rightCol.addSpaced(infoBox, this, 18)
+            main.addView(rightCol, Ui.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = Ui.dp(this@RunActivity, 28)
+            })
+            root.addSpaced(main, this, 8)
+        } else {
+            root.addSpaced(speedBox, this, 8)
+            root.addSpaced(restBox, this, 14)
+            root.addSpaced(infoBox, this, 18)
+        }
 
         // Avant le départ
         startBox = Ui.vertical(this)
         startBox.addView(Ui.button(this, "Démarrer") { session?.start() }.apply {
-            minHeight = Ui.dp(this@RunActivity, 72)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+            minHeight = Ui.dp(this@RunActivity, 76)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 28f)
         })
-        startBox.addSpaced(Ui.text(this, "Le tapis démarre puis prend la vitesse de la première étape.", 14f, Ui.MUTED), this, 8)
+        startBox.addSpaced(Ui.text(this, "Le tapis démarre puis prend la vitesse de la première étape.", 16f, Ui.MUTED), this, 8)
         root.addSpaced(startBox, this, 20)
+        fullOnly += startBox
 
         // Pendant la séance
         controls = Ui.vertical(this)
-        val adjust = Ui.horizontal(this)
-        adjust.addView(Ui.button(this, "− 0,1 km/h", primary = false) { session?.adjust(-0.1) }, Ui.lp(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        adjust.addView(View(this), Ui.lp(Ui.dp(this, 8), 1))
-        adjust.addView(Ui.button(this, "+ 0,1 km/h", primary = false) { session?.adjust(0.1) }, Ui.lp(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        controls.addView(adjust)
-        val nav = Ui.horizontal(this)
-        nav.addView(Ui.button(this, "◀ Étape", primary = false) { session?.back() }, Ui.lp(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        nav.addView(View(this), Ui.lp(Ui.dp(this, 8), 1))
+        val row = Ui.horizontal(this)
+        row.addView(Ui.button(this, "− 0,1 km/h", primary = false) { session?.adjust(-0.1) }, Ui.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(Ui.gap(this))
+        row.addView(Ui.button(this, "+ 0,1 km/h", primary = false) { session?.adjust(0.1) }, Ui.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        if (wideLayout) row.addView(Ui.gap(this, 24))
+        val nav = if (wideLayout) row else Ui.horizontal(this)
+        nav.addView(Ui.button(this, "Étape précédente", primary = false) { session?.back() }, Ui.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.2f))
+        nav.addView(Ui.gap(this))
         pauseButton = Ui.button(this, "Pause") { togglePause() }
-        nav.addView(pauseButton, Ui.lp(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.3f))
-        nav.addView(View(this), Ui.lp(Ui.dp(this, 8), 1))
-        nav.addView(Ui.button(this, "Suivant ▶", primary = false) { session?.skip() }, Ui.lp(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        controls.addSpaced(nav, this, 10)
+        nav.addView(pauseButton, Ui.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.2f))
+        nav.addView(Ui.gap(this))
+        nav.addView(Ui.button(this, "Suivant", primary = false) { session?.skip() }, Ui.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        controls.addView(row)
+        if (!wideLayout) controls.addSpaced(nav, this, 10)
         controls.addSpaced(Ui.button(this, "Terminer la séance", primary = false) { confirmStop() }, this, 10)
         root.addSpaced(controls, this, 20)
+        fullOnly += controls
 
         // Fin
         endBox = Ui.vertical(this)
-        endSummary = Ui.text(this, "", 16f)
+        endSummary = Ui.text(this, "", 18f)
         endBox.addView(endSummary)
         endBox.addSpaced(Ui.button(this, "Fermer") { close() }, this, 12)
         root.addSpaced(endBox, this, 20)
+        fullOnly += endBox
     }
 
     override fun onResume() {
@@ -170,62 +241,74 @@ class RunActivity : Activity(), RunSession.Listener {
         val e = s.engine
         val step = e.current
         val n = e.steps.size
+        val finished = e.phase == Phase.FINISHED
 
         stepLabel.text = when {
+            finished -> "Séance terminée"
             step == null -> s.workout.name
-            e.phase == Phase.FINISHED -> "Séance terminée"
-            else -> "${e.index + 1}/$n · ${step.title}"
+            else -> step.title
         }
-        totals.text = "${Format.duration(e.totalElapsedMs() / 1000.0)}\n${Format.distance(e.totalDistanceM)}"
+        stepCount.text = if (finished || step == null) "" else "Étape ${e.index + 1} sur $n"
 
         val msg = s.notice ?: if (e.phase == Phase.PAUSED) "En pause" else null
         notice.text = msg ?: ""
-        notice.visibility = if (msg != null) View.VISIBLE else View.GONE
+        notice.visibility = if (msg != null && !inPip) View.VISIBLE else View.GONE
 
-        val t = if (e.phase == Phase.FINISHED) null else e.targetKmh()
+        val t = if (finished) null else e.targetKmh()
         target.text = t?.let { Format.kmh(it) } ?: "--"
         pace.text = t?.let { "${Format.pace(it)} /km" } ?: ""
-        actual.text = s.lastTreadmillSpeed?.let { "Tapis : ${Format.kmh(it)} km/h" } ?: "Tapis : pas de données"
-        if (e.adjustKmh != 0.0 && t != null) {
-            actual.text = "${actual.text} · ajusté de ${if (e.adjustKmh > 0) "+" else ""}${Format.num1(e.adjustKmh)}"
+        actual.text = buildString {
+            append(s.lastTreadmillSpeed?.let { "Le tapis indique ${Format.kmh(it)} km/h" } ?: "Pas de données du tapis")
+            if (e.adjustKmh != 0.0 && t != null) {
+                append(", ajusté de ${if (e.adjustKmh > 0) "+" else ""}${Format.num1(e.adjustKmh)} km/h")
+            }
         }
 
         val remS = e.stepRemainingS()
         val remM = e.stepRemainingM()
         when {
-            e.phase == Phase.FINISHED -> {
-                remaining.text = "✓"
+            finished -> {
+                remaining.text = "Bravo"
                 remainingLabel.text = ""
             }
             remS != null -> {
                 remaining.text = Format.duration(Math.ceil(remS))
-                remainingLabel.text = "restantes"
+                remainingLabel.text = "restantes sur cette étape"
             }
             remM != null -> {
                 remaining.text = if (remM >= 1000) Format.distance(remM) else "${Math.ceil(remM).toInt()} m"
-                remainingLabel.text = "restants"
+                remainingLabel.text = "restants sur cette étape"
             }
             else -> {
                 remaining.text = Format.duration(e.stepElapsedMs() / 1000.0)
-                remainingLabel.text = "Appuie sur « Suivant » quand tu as fini"
+                remainingLabel.text = "Touche « Suivant » quand tu as fini cette étape"
             }
         }
+        val stepFraction = e.stepProgress() ?: (e.stepElapsedMs() / 60_000.0).coerceAtMost(0.95)
         progress.progress = ((e.stepProgress() ?: 0.0) * 1000).toInt()
+        profile.position = when (e.phase) {
+            Phase.READY -> -1.0
+            Phase.FINISHED -> 1.0
+            else -> profile.positionFor(e.index, stepFraction)
+        }
+
+        elapsedStat.text = Format.duration(e.totalElapsedMs() / 1000.0)
+        distanceStat.text = Format.distance(e.totalDistanceM)
 
         val nx = e.next
         nextLine.text = when {
-            e.phase == Phase.FINISHED -> ""
+            finished -> ""
             nx == null -> "Dernière étape"
-            else -> "Ensuite : ${nx.title} · ${Format.endCondition(nx.step.end)} · ${Format.kmh(nx.speedKmh)} km/h"
+            else -> "Ensuite : ${nx.title.lowercase()}, ${Format.endCondition(nx.step.end)} à ${Format.kmh(nx.speedKmh)} km/h"
         }
-        step?.step?.description?.let { if (e.phase != Phase.FINISHED) nextLine.text = "${it}\n${nextLine.text}" }
+        step?.step?.description?.let { if (!finished) nextLine.text = "$it\n${nextLine.text}" }
 
         startBox.visibility = if (!inPip && e.phase == Phase.READY) View.VISIBLE else View.GONE
         controls.visibility = if (!inPip && (e.phase == Phase.RUNNING || e.phase == Phase.PAUSED)) View.VISIBLE else View.GONE
-        endBox.visibility = if (!inPip && e.phase == Phase.FINISHED) View.VISIBLE else View.GONE
+        endBox.visibility = if (!inPip && finished) View.VISIBLE else View.GONE
         pauseButton.text = if (e.phase == Phase.PAUSED) "Reprendre" else "Pause"
-        if (e.phase == Phase.FINISHED) {
-            endSummary.text = "Durée ${Format.duration(e.totalElapsedMs() / 1000.0)} · ${Format.distance(e.totalDistanceM)}\n" +
+        if (finished) {
+            endSummary.text = "Séance terminée en ${Format.duration(e.totalElapsedMs() / 1000.0)} pour ${Format.distance(e.totalDistanceM)}.\n" +
                 "Pense à arrêter l'activité sur ta montre."
         }
         updatePipParams(e.phase == Phase.RUNNING || e.phase == Phase.PAUSED)
@@ -293,14 +376,12 @@ class RunActivity : Activity(), RunSession.Listener {
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         inPip = isInPictureInPictureMode
-        header.visibility = if (inPip) View.GONE else View.VISIBLE
-        nextLine.visibility = if (inPip) View.GONE else View.VISIBLE
-        actual.visibility = if (inPip) View.GONE else View.VISIBLE
-        target.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (inPip) 40f else 96f)
-        targetUnit.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (inPip) 14f else 24f)
-        pace.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (inPip) 14f else 22f)
-        remaining.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (inPip) 30f else 64f)
-        remainingLabel.visibility = if (inPip) View.GONE else View.VISIBLE
+        if (!inPip && isWideNow() != wideLayout) buildUi()
+        fullOnly.forEach { it.visibility = if (inPip) View.GONE else View.VISIBLE }
+        target.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (inPip) 48f else if (wideLayout) 190f else 128f)
+        targetUnit.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (inPip) 14f else if (wideLayout) 34f else 26f)
+        pace.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (inPip) 16f else if (wideLayout) 40f else 32f)
+        remaining.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (inPip) 30f else if (wideLayout) 120f else 88f)
         if (inPip) session?.listeners?.add(this)
         onUpdate()
     }

@@ -4,11 +4,14 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
+import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
+import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import fr.tapissync.App
-import fr.tapissync.ble.FootpodBroadcaster
 import fr.tapissync.ble.Ftms
 import fr.tapissync.ble.TreadmillManager
 import fr.tapissync.garmin.GarminException
@@ -20,119 +23,130 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-class MainActivity : Activity(), TreadmillManager.Listener, FootpodBroadcaster.Listener {
+/**
+ * Accueil. Sur tablette en paysage : à gauche l'état (Garmin, tapis), à droite les séances.
+ * Sur téléphone : tout en une colonne.
+ */
+class MainActivity : Activity(), TreadmillManager.Listener {
 
     private val app get() = App.instance
-    private lateinit var root: LinearLayout
     private lateinit var sessionCard: LinearLayout
     private lateinit var sessionText: TextView
-    private lateinit var garminStatus: TextView
-    private lateinit var garminButton: android.widget.Button
-    private lateinit var tmStatus: TextView
-    private lateinit var podStatus: TextView
-    private lateinit var podButton: android.widget.Button
+    private lateinit var garminStatus: Ui.StatusLine
+    private lateinit var garminButton: Button
+    private lateinit var tmStatus: Ui.StatusLine
+    private lateinit var tmSpeed: TextView
     private lateinit var listStatus: TextView
     private lateinit var list: LinearLayout
-    private lateinit var tabScheduled: android.widget.Button
-    private lateinit var tabLibrary: android.widget.Button
+    private lateinit var tabScheduled: Button
+    private lateinit var tabLibrary: Button
     private var showLibrary = false
     private var loading = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        root = Ui.page(this, "TapisSync", "Tes séances Garmin Connect, jouées par le tapis.")
+        val wide = Ui.isWide(this)
+        val pad = Ui.dp(this, if (wide) 32 else 22)
+
+        val left: LinearLayout
+        val right: LinearLayout
+        if (wide) {
+            val split = Ui.horizontal(this).apply {
+                setBackgroundColor(Ui.BG)
+                gravity = Gravity.TOP
+            }
+            left = Ui.vertical(this).apply { setPadding(pad, pad, pad / 2, pad) }
+            right = Ui.vertical(this).apply { setPadding(pad / 2, pad, pad, pad) }
+            split.addView(scroll(left), Ui.lp(Ui.dp(this, 420), ViewGroup.LayoutParams.MATCH_PARENT))
+            split.addView(View(this).apply { setBackgroundColor(0xFF1A1A1A.toInt()) }, Ui.lp(Ui.dp(this, 1), ViewGroup.LayoutParams.MATCH_PARENT))
+            split.addView(scroll(right), Ui.lp(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
+            setContentView(split)
+        } else {
+            val col = Ui.vertical(this).apply { setPadding(pad, pad, pad, pad * 2) }
+            setContentView(scroll(col))
+            left = col
+            right = col
+        }
+
+        // En-tête
+        left.addView(Ui.header(this, "TapisSync", 46f))
+        left.addSpaced(Ui.text(this, "Tes séances Garmin Connect, jouées par le tapis.", 16f, Ui.MUTED), this, 6)
 
         // Séance en cours
-        sessionCard = Ui.card(this).apply {
-            background = Ui.rounded(Ui.ACCENT_DARK, 16, this@MainActivity, Ui.ACCENT)
-        }
-        sessionText = Ui.text(this, "", 16f, bold = true)
+        sessionCard = Ui.accentCard(this)
+        sessionText = Ui.label(this, "", 20f)
         sessionCard.addView(sessionText)
         sessionCard.addSpaced(Ui.button(this, "Revenir à la séance") {
             startActivity(Intent(this, RunActivity::class.java))
-        }, this, 10)
-        root.addSpaced(sessionCard, this, 16)
+        }, this, 12)
+        left.addSpaced(sessionCard, this, 24)
 
         // Garmin
         val g = Ui.card(this)
-        g.addView(Ui.text(this, "Garmin Connect", 18f, bold = true))
-        garminStatus = Ui.text(this, "", 15f, Ui.MUTED)
-        g.addSpaced(garminStatus, this, 4)
+        g.addView(Ui.label(this, "Garmin Connect", 22f))
+        garminStatus = Ui.status(this)
+        g.addSpaced(garminStatus, this, 8)
         garminButton = Ui.button(this, "Se connecter", primary = false) { onGarminButton() }
-        g.addSpaced(garminButton, this, 10)
-        root.addSpaced(g, this, 16)
+        g.addSpaced(garminButton, this, 14)
+        left.addSpaced(g, this, 20)
 
         // Tapis
         val t = Ui.card(this)
-        t.addView(Ui.text(this, "Tapis de course", 18f, bold = true))
-        tmStatus = Ui.text(this, "", 15f, Ui.MUTED)
-        t.addSpaced(tmStatus, this, 4)
-        t.addSpaced(Ui.button(this, "Choisir le tapis / tester", primary = false) {
+        val tHead = Ui.horizontal(this)
+        tHead.addView(Ui.label(this, "Tapis", 22f), Ui.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        tmSpeed = Ui.display(this, "", 30f, Ui.ACCENT, glow = true)
+        tHead.addView(tmSpeed)
+        t.addView(tHead)
+        tmStatus = Ui.status(this)
+        t.addSpaced(tmStatus, this, 8)
+        t.addSpaced(Ui.button(this, "Choisir ou tester le tapis", primary = false) {
             startActivity(Intent(this, TreadmillActivity::class.java))
-        }, this, 10)
-        root.addSpaced(t, this, 12)
-
-        // Capteur de foulée pour la montre
-        val w = Ui.card(this)
-        w.addView(Ui.text(this, "Montre : capteur de foulée", 18f, bold = true))
-        podStatus = Ui.text(this, "", 15f, Ui.MUTED)
-        w.addSpaced(podStatus, this, 4)
-        podButton = Ui.button(this, "Activer", primary = false) { toggleFootpod() }
-        w.addSpaced(podButton, this, 10)
-        w.addSpaced(
-            Ui.text(
-                this,
-                "Appairage sur la Fenix 8 : Paramètres › Capteurs et accessoires › Ajouter › Foulée " +
-                    "(appelé « Accéléromètre » sur certaines versions). Dans les réglages du capteur, " +
-                    "règle la vitesse et la distance sur « Toujours » ou « Intérieur ».",
-                13f, Ui.MUTED,
-            ),
-            this, 8,
-        )
-        root.addSpaced(w, this, 12)
+        }, this, 14)
+        left.addSpaced(t, this, 12)
 
         // Séances
-        root.addSpaced(Ui.text(this, "Séances", 22f, bold = true), this, 24)
+        val head = Ui.horizontal(this)
+        head.addView(Ui.section(this, "Séances"), Ui.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        head.addView(Ui.button(this, "Actualiser", primary = false) { load(true) },
+            Ui.lp(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        right.addSpaced(head, this, if (wide) 0 else 32)
+
         val tabs = Ui.horizontal(this)
         tabScheduled = Ui.button(this, "Planifiées") { showLibrary = false; refreshTabs(); load(false) }
         tabLibrary = Ui.button(this, "Mes entraînements") { showLibrary = true; refreshTabs(); load(false) }
-        tabs.addView(tabScheduled, Ui.lp(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        tabs.addView(View(this), Ui.lp(Ui.dp(this, 8), 1))
-        tabs.addView(tabLibrary, Ui.lp(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        tabs.addView(View(this), Ui.lp(Ui.dp(this, 8), 1))
-        tabs.addView(Ui.button(this, "↻", primary = false) { load(true) },
-            Ui.lp(Ui.dp(this, 56), LinearLayout.LayoutParams.WRAP_CONTENT))
-        root.addSpaced(tabs, this, 10)
-        listStatus = Ui.text(this, "", 15f, Ui.MUTED)
-        root.addSpaced(listStatus, this, 10)
+        tabs.addView(tabScheduled, Ui.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        tabs.addView(Ui.gap(this))
+        tabs.addView(tabLibrary, Ui.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        right.addSpaced(tabs, this, 14)
+        listStatus = Ui.text(this, "", 16f, Ui.MUTED)
+        right.addSpaced(listStatus, this, 12)
         list = Ui.vertical(this)
-        root.addSpaced(list, this, 4)
+        right.addSpaced(list, this, 0)
 
-        // Pied de page
+        // Réglages et diagnostic
         val footer = Ui.horizontal(this)
         footer.addView(Ui.button(this, "Réglages", primary = false) {
             startActivity(Intent(this, SettingsActivity::class.java))
-        }, Ui.lp(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        footer.addView(View(this), Ui.lp(Ui.dp(this, 8), 1))
+        }, Ui.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        footer.addView(Ui.gap(this))
         footer.addView(Ui.button(this, "Diagnostic", primary = false) {
             startActivity(Intent(this, TreadmillActivity::class.java).putExtra(TreadmillActivity.EXTRA_DIAG, true))
-        }, Ui.lp(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        root.addSpaced(footer, this, 28)
+        }, Ui.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        left.addSpaced(footer, this, if (wide) 20 else 32)
 
         refreshTabs()
+    }
+
+    private fun scroll(content: View): ScrollView = ScrollView(this).apply {
+        setBackgroundColor(Ui.BG)
+        isFillViewport = true
+        addView(content)
     }
 
     override fun onResume() {
         super.onResume()
         app.treadmill.listeners.add(this)
-        app.footpod.listeners.add(this)
         autoConnectTreadmill()
-        val pod = app.footpod
-        if (app.prefs.footpodEnabled && pod.hasPermissions() &&
-            (pod.state == FootpodBroadcaster.State.OFF || pod.state == FootpodBroadcaster.State.ERROR)
-        ) {
-            pod.start()
-        }
         refreshStatus()
         val cached = if (showLibrary) app.cachedLibrary else app.cachedScheduled
         if (cached != null) render(cached) else load(false)
@@ -140,7 +154,6 @@ class MainActivity : Activity(), TreadmillManager.Listener, FootpodBroadcaster.L
 
     override fun onPause() {
         app.treadmill.listeners.remove(this)
-        app.footpod.listeners.remove(this)
         super.onPause()
     }
 
@@ -159,84 +172,31 @@ class MainActivity : Activity(), TreadmillManager.Listener, FootpodBroadcaster.L
 
         if (app.prefs.isGarminConnected) {
             val name = app.prefs.garminDisplayName
-            garminStatus.text = if (name != null) "Connecté ($name)" else "Connecté"
-            garminStatus.setTextColor(Ui.OK)
+            garminStatus.set(if (name != null) "Connecté en tant que $name" else "Connecté", Ui.OK)
             garminButton.text = "Se déconnecter"
         } else {
-            garminStatus.text = "Non connecté. Connecte-toi pour voir tes séances."
-            garminStatus.setTextColor(Ui.MUTED)
+            garminStatus.set("Non connecté. Connecte-toi pour voir tes séances.", Ui.MUTED)
             garminButton.text = "Se connecter à Garmin"
         }
         updateTreadmillText()
-        updateFootpodText()
     }
-
-    private fun updateFootpodText() {
-        val pod = app.footpod
-        val enabled = app.prefs.footpodEnabled
-        podButton.text = if (enabled) "Désactiver" else "Activer"
-        podStatus.text = when {
-            !enabled -> "Désactivé. Active-le pour envoyer la vitesse du tapis à ta montre."
-            pod.state == FootpodBroadcaster.State.ERROR -> pod.message ?: "Erreur"
-            pod.state == FootpodBroadcaster.State.CONNECTED ->
-                "Connecté à ${pod.connectedNames.joinToString()} · ${Format.kmh(pod.speedKmh)} km/h envoyés"
-            pod.state == FootpodBroadcaster.State.ADVERTISING ->
-                "Visible par la montre sous le nom de cet appareil Android. En attente d'appairage…"
-            pod.state == FootpodBroadcaster.State.OFF && !pod.hasPermissions() -> "Autorisation Bluetooth à accorder."
-            else -> pod.state.label
-        }
-        podStatus.setTextColor(
-            when {
-                !enabled -> Ui.MUTED
-                pod.state == FootpodBroadcaster.State.CONNECTED -> Ui.OK
-                pod.state == FootpodBroadcaster.State.ERROR -> Ui.ERROR
-                else -> Ui.WARN
-            },
-        )
-    }
-
-    private fun toggleFootpod() {
-        val pod = app.footpod
-        if (app.prefs.footpodEnabled) {
-            app.prefs.footpodEnabled = false
-            pod.stop()
-        } else {
-            app.prefs.footpodEnabled = true
-            if (pod.hasPermissions()) pod.start() else requestPermissions(pod.requiredPermissions(), REQ_FOOTPOD)
-        }
-        updateFootpodText()
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQ_FOOTPOD) {
-            if (app.footpod.hasPermissions()) app.footpod.start()
-            updateFootpodText()
-        }
-    }
-
-    override fun onFootpodChanged() = updateFootpodText()
 
     private fun updateTreadmillText() {
         val tm = app.treadmill
         val name = tm.deviceName ?: app.prefs.treadmillName
-        tmStatus.text = when {
-            name == null -> "Aucun tapis choisi."
-            tm.state == TreadmillManager.State.READY && !tm.hasControlPoint ->
-                "$name : connecté, mais pilotage indisponible (${tm.stateMessage ?: "voir Diagnostic"})."
-            tm.state == TreadmillManager.State.READY -> {
-                val v = tm.lastData?.speedKmh?.let { " · ${Format.kmh(it)} km/h" } ?: ""
-                "$name : connecté$v"
-            }
-            else -> "$name : ${tm.state.label.lowercase()}${tm.stateMessage?.let { " ($it)" } ?: ""}"
+        val ready = tm.state == TreadmillManager.State.READY
+        when {
+            name == null -> tmStatus.set("Aucun tapis choisi.", Ui.MUTED)
+            ready && !tm.hasControlPoint ->
+                tmStatus.set("$name connecté, mais pas pilotable (${tm.stateMessage ?: "voir Diagnostic"}).", Ui.WARN)
+            ready -> tmStatus.set("$name connecté", Ui.OK)
+            else -> tmStatus.set(
+                "$name : ${tm.state.label.lowercase()}${tm.stateMessage?.let { ", $it" } ?: ""}",
+                if (tm.state == TreadmillManager.State.DISCONNECTED) Ui.MUTED else Ui.WARN,
+            )
         }
-        tmStatus.setTextColor(
-            when {
-                tm.state == TreadmillManager.State.READY && tm.hasControlPoint -> Ui.OK
-                tm.state == TreadmillManager.State.READY -> Ui.WARN
-                else -> Ui.MUTED
-            },
-        )
+        val v = tm.lastData?.speedKmh
+        tmSpeed.text = if (ready && v != null && v > 0.05) "${Format.kmh(v)} km/h" else ""
     }
 
     private fun onGarminButton() {
@@ -269,16 +229,15 @@ class MainActivity : Activity(), TreadmillManager.Listener, FootpodBroadcaster.L
     }
 
     private fun refreshTabs() {
-        tabScheduled.background = Ui.rounded(if (!showLibrary) Ui.ACCENT else Ui.SURFACE_2, 12, this, if (!showLibrary) null else Ui.BORDER)
-        tabScheduled.setTextColor(if (!showLibrary) 0xFF1A0E07.toInt() else Ui.TEXT)
-        tabLibrary.background = Ui.rounded(if (showLibrary) Ui.ACCENT else Ui.SURFACE_2, 12, this, if (showLibrary) null else Ui.BORDER)
-        tabLibrary.setTextColor(if (showLibrary) 0xFF1A0E07.toInt() else Ui.TEXT)
+        Ui.styleTab(tabScheduled, !showLibrary)
+        Ui.styleTab(tabLibrary, showLibrary)
     }
 
     private fun load(force: Boolean) {
         if (!app.prefs.isGarminConnected) {
             list.removeAllViews()
             listStatus.text = "Connecte-toi à Garmin pour afficher tes séances."
+            listStatus.setTextColor(Ui.MUTED)
             return
         }
         val library = showLibrary
@@ -290,7 +249,7 @@ class MainActivity : Activity(), TreadmillManager.Listener, FootpodBroadcaster.L
         if (loading) return
         loading = true
         list.removeAllViews()
-        listStatus.text = "Chargement…"
+        listStatus.text = "Chargement des séances…"
         listStatus.setTextColor(Ui.MUTED)
         app.io.execute {
             try {
@@ -305,7 +264,7 @@ class MainActivity : Activity(), TreadmillManager.Listener, FootpodBroadcaster.L
             } catch (e: Exception) {
                 runOnUiThread {
                     loading = false
-                    listStatus.text = e.message ?: "Erreur de chargement"
+                    listStatus.text = e.message ?: "Chargement impossible. Vérifie ta connexion internet puis touche Actualiser."
                     listStatus.setTextColor(Ui.ERROR)
                     if (e is GarminException && e.needLogin) refreshStatus()
                 }
@@ -317,30 +276,54 @@ class MainActivity : Activity(), TreadmillManager.Listener, FootpodBroadcaster.L
         list.removeAllViews()
         listStatus.setTextColor(Ui.MUTED)
         listStatus.text = when {
-            items.isEmpty() && !showLibrary -> "Aucune séance de course planifiée entre il y a 3 jours et dans 3 semaines."
+            items.isEmpty() && !showLibrary ->
+                "Aucune séance de course planifiée entre il y a 3 jours et dans 3 semaines. Planifie-en une dans Garmin Connect, puis touche Actualiser."
             items.isEmpty() -> "Aucune séance de course dans « Mes entraînements »."
             else -> ""
         }
+        listStatus.visibility = if (listStatus.text.isNullOrEmpty()) View.GONE else View.VISIBLE
         val today = LocalDate.now()
-        val fmt = DateTimeFormatter.ofPattern("EEE d MMM", Locale.FRANCE)
+        val dayFmt = DateTimeFormatter.ofPattern("EEE", Locale.FRANCE)
+        val dateFmt = DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.FRANCE)
         for (w in items) {
-            val row = Ui.card(this).apply { isClickable = true }
-            val top = Ui.horizontal(this)
             val d = w.date
-            val dateLabel = when (d) {
-                null -> null
-                today -> "Aujourd'hui"
-                today.plusDays(1) -> "Demain"
-                today.minusDays(1) -> "Hier"
-                else -> d.format(fmt)
+            val isToday = d == today
+            val row = Ui.horizontal(this).apply {
+                background = if (isToday) Ui.accentBackground(this@MainActivity) else Ui.rounded(Ui.SURFACE, 4, this@MainActivity)
+                val p = Ui.dp(this@MainActivity, 16)
+                setPadding(p + if (isToday) Ui.dp(this@MainActivity, 4) else 0, p, p, p)
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { open(w) }
             }
-            if (dateLabel != null) {
-                top.addView(Ui.text(this, dateLabel, 13f, if (w.date == today) Ui.ACCENT else Ui.MUTED, bold = true))
+            if (d != null) {
+                val dateBlock = Ui.vertical(this).apply { gravity = Gravity.CENTER_HORIZONTAL }
+                dateBlock.addView(Ui.display(this, d.dayOfMonth.toString(), 34f, if (isToday) Ui.ACCENT else Ui.TEXT, glow = isToday))
+                dateBlock.addView(Ui.label(this, d.format(dayFmt), 15f, Ui.MUTED))
+                row.addView(dateBlock, Ui.lp(Ui.dp(this, 56), ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    marginEnd = Ui.dp(this@MainActivity, 16)
+                })
             }
-            row.addView(top)
-            row.addSpaced(Ui.text(this, w.name, 17f, bold = true), this, if (dateLabel != null) 2 else 0)
-            w.estimatedSeconds?.let { row.addSpaced(Ui.text(this, "Environ ${Format.duration(it)}", 14f, Ui.MUTED), this, 2) }
-            row.setOnClickListener { open(w) }
+            val info = Ui.vertical(this)
+            info.addView(Ui.label(this, w.name, 21f))
+            val sub = buildString {
+                if (d != null) {
+                    append(
+                        when (d) {
+                            today -> "Aujourd'hui"
+                            today.plusDays(1) -> "Demain"
+                            today.minusDays(1) -> "Hier"
+                            else -> d.format(dateFmt).replaceFirstChar { it.uppercase() }
+                        },
+                    )
+                }
+                w.estimatedSeconds?.let {
+                    if (isNotEmpty()) append(", ")
+                    append("environ ${Format.duration(it)}")
+                }
+            }
+            if (sub.isNotEmpty()) info.addSpaced(Ui.text(this, sub, 15f, Ui.MUTED), this, 2)
+            row.addView(info, Ui.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             list.addSpaced(row, this, 10)
         }
     }
@@ -375,6 +358,5 @@ class MainActivity : Activity(), TreadmillManager.Listener, FootpodBroadcaster.L
 
     companion object {
         private const val REQ_LOGIN = 1
-        private const val REQ_FOOTPOD = 2
     }
 }

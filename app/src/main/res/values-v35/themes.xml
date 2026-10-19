@@ -7,6 +7,10 @@
         <item name="android:colorAccent">@color/accent</item>
         <item name="android:colorPrimary">@color/bg</item>
         <item name="android:colorPrimaryDark">@color/bg</item>
+        <item name="android:fontFamily">@font/barlow_regular</item>
+        <item name="android:textColorPrimary">#FFF3F3F3</item>
+        <item name="android:textColorSecondary">#FF8F8F8F</item>
+        <item name="android:colorControlActivated">@color/accent</item>
         <!-- Les écrans sont construits sans gestion des encoches : on garde les barres système classiques. -->
         <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
     </style>

@@ -58,17 +58,6 @@ class Prefs(context: Context) {
         get() = p.getBoolean("beep", true)
         set(v) = p.edit().putBoolean("beep", v).apply()
 
-    // ---------- Capteur de foulée pour la montre ----------
-
-    var footpodEnabled: Boolean
-        get() = p.getBoolean("footpod", false)
-        set(v) = p.edit().putBoolean("footpod", v).apply()
-
-    /** Cadence envoyée à la montre (pas/min), 0 = aucune. */
-    var footpodCadence: Int
-        get() = p.getInt("footpod_cadence", 0)
-        set(v) = p.edit().putInt("footpod_cadence", v).apply()
-
     // ---------- Tapis ----------
 
     var treadmillAddress: String?

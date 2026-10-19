@@ -45,7 +45,7 @@ class LoginActivity : Activity() {
             setPadding(p, p, p, p)
         }
         val titles = Ui.vertical(this)
-        titles.addView(Ui.text(this, "Connexion Garmin", 20f, bold = true))
+        titles.addView(Ui.section(this, "Connexion Garmin"))
         status = Ui.text(this, "Saisis tes identifiants Garmin dans la page ci-dessous.", 13f, Ui.MUTED)
         titles.addView(status)
         bar.addView(titles, Ui.lp(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))

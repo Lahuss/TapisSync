@@ -57,7 +57,7 @@ class TreadmillActivity : Activity(), TreadmillManager.Listener {
         root.addSpaced(results, this, 6)
 
         // Test du pilotage
-        root.addSpaced(Ui.text(this, "Tester le pilotage", 20f, bold = true), this, 24)
+        root.addSpaced(Ui.section(this, "Tester le pilotage"), this, 24)
         root.addSpaced(
             Ui.text(this, "Monte sur les rebords du tapis et garde la clé de sécurité attachée avant de lancer un test.", 14f, Ui.WARN),
             this, 4,
@@ -81,7 +81,7 @@ class TreadmillActivity : Activity(), TreadmillManager.Listener {
         root.addSpaced(row2, this, 8)
 
         // Diagnostic
-        root.addSpaced(Ui.text(this, "Diagnostic", 20f, bold = true), this, 28)
+        root.addSpaced(Ui.section(this, "Diagnostic"), this, 28)
         root.addSpaced(Ui.text(this, "Si quelque chose ne marche pas, partage ce journal pour que je corrige l'appli.", 14f, Ui.MUTED), this, 4)
         val row3 = Ui.horizontal(this)
         row3.addView(Ui.button(this, "Partager le journal", primary = false) { share() },

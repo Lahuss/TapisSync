@@ -3,7 +3,6 @@ package fr.tapissync
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import fr.tapissync.ble.FootpodBroadcaster
 import fr.tapissync.ble.TreadmillManager
 import fr.tapissync.garmin.GarminClient
 import fr.tapissync.garmin.WorkoutSummary
@@ -23,10 +22,6 @@ class App : Application() {
     lateinit var notificationManager: NotificationManager
         private set
 
-    /** Capteur de foulée simulé, qui renvoie la vitesse du tapis à la montre. */
-    lateinit var footpod: FootpodBroadcaster
-        private set
-
     /** Fils pour le réseau (jamais sur le fil principal). */
     val io: ExecutorService = Executors.newFixedThreadPool(2)
 
@@ -43,11 +38,10 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        fr.tapissync.ui.Ui.init(this)
         prefs = Prefs(this)
         garmin = GarminClient(prefs)
         treadmill = TreadmillManager(this)
-        footpod = FootpodBroadcaster(this) { treadmill.deviceAddress }.apply { cadence = prefs.footpodCadence }
-        treadmill.listeners.add(footpod)
         notificationManager = getSystemService(NotificationManager::class.java)
         notificationManager.createNotificationChannel(
             NotificationChannel(CHANNEL_RUN, "Séance en cours", NotificationManager.IMPORTANCE_LOW).apply {
@@ -55,7 +49,6 @@ class App : Application() {
                 setShowBadge(false)
             },
         )
-        if (prefs.footpodEnabled && footpod.hasPermissions()) footpod.start()
     }
 
     companion object {
