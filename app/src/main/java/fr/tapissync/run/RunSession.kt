@@ -279,10 +279,22 @@ class RunSession(
                 if (engine.phase == WorkoutEngine.Phase.PAUSED && pausedByTreadmill) resumeFromTreadmill()
             }
             is Ftms.StatusEvent.TargetSpeedChanged -> {
-                val sinceCommand = SystemClock.elapsedRealtime() - lastCommandMs
-                if (engine.phase == WorkoutEngine.Phase.RUNNING && sinceCommand > 2500 &&
-                    abs(event.kmh - engine.targetKmh()) > 0.05
-                ) {
+                if (engine.phase != WorkoutEngine.Phase.RUNNING) return
+                if (abs(event.kmh - engine.targetKmh()) <= 0.05) return
+                val now = SystemClock.elapsedRealtime()
+                if (now - lastStartCommandMs < START_GRACE_MS) {
+                    // Juste après le départ, le tapis impose sa vitesse de démarrage (1 km/h) :
+                    // ce n'est pas un réglage fait à la main, on remet la vitesse de l'étape.
+                    AppLog.add("Séance", "Le tapis passe à ${Format.kmh(event.kmh)} km/h au démarrage : on remet ${Format.kmh(engine.targetKmh())} km/h")
+                    main.postDelayed({
+                        if (!released && engine.phase == WorkoutEngine.Phase.RUNNING) {
+                            tm.setSpeed(engine.targetKmh())
+                            lastCommandMs = SystemClock.elapsedRealtime()
+                        }
+                    }, 800)
+                    return
+                }
+                if (now - lastCommandMs > 2500) {
                     // Changement fait sur la console : on le respecte jusqu'à la fin de l'étape.
                     engine.acceptManualTarget(event.kmh)
                     showNotice("Vitesse changée sur le tapis : ${Format.kmh(event.kmh)} km/h pour cette étape.")

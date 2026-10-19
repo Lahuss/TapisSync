@@ -85,6 +85,26 @@ class RunSessionTest {
     }
 
     @Test
+    fun treadmillStartSpeedIsNotTakenAsManualChange() {
+        val s = newSession()
+        s.start()
+        advance(4)
+        // Fin du compte à rebours : le tapis annonce sa vitesse de départ, 1 km/h.
+        s.onStatus(Ftms.StatusEvent.TargetSpeedChanged(1.0))
+        assertEquals(10.0, s.engine.targetKmh(), 1e-9)
+        assertEquals(0.0, s.engine.adjustKmh, 1e-9)
+    }
+
+    @Test
+    fun consoleSpeedChangeLaterIsKeptForTheStep() {
+        val s = newSession()
+        s.start()
+        advance(30)
+        s.onStatus(Ftms.StatusEvent.TargetSpeedChanged(11.0))
+        assertEquals(11.0, s.engine.targetKmh(), 1e-9)
+    }
+
+    @Test
     fun safetyKeyAlwaysPauses() {
         val s = newSession()
         s.start()
