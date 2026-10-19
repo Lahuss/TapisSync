@@ -31,9 +31,7 @@ class LoginActivity : Activity() {
     private lateinit var web: WebView
     private lateinit var status: TextView
     private lateinit var progress: ProgressBar
-    private lateinit var method: LoginMethod
     private val handled = AtomicBoolean(false)
-    private var mainPageLoaded = false
 
     private val ticketInText = Regex("""ticket=(ST-[A-Za-z0-9._\-]+)""")
     private val ticketInJson = Regex(""""serviceTicketId"\s*:\s*"(ST-[^"]+)"""")
@@ -41,9 +39,6 @@ class LoginActivity : Activity() {
     @SuppressLint("SetJavaScriptEnabled", "AddJavascriptInterface")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val app = App.instance
-        method = LoginMethod.from(intent.getStringExtra(EXTRA_METHOD) ?: app.prefs.loginMethod)
-
         val root = Ui.vertical(this).apply { setBackgroundColor(Ui.BG) }
         val bar = Ui.horizontal(this).apply {
             val p = Ui.dp(this@LoginActivity, 12)
@@ -56,12 +51,6 @@ class LoginActivity : Activity() {
         bar.addView(titles, Ui.lp(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         progress = ProgressBar(this).apply { visibility = View.GONE }
         bar.addView(progress, Ui.lp(Ui.dp(this, 32), Ui.dp(this, 32)))
-        val other = if (method == LoginMethod.WIDGET) LoginMethod.MOBILE else LoginMethod.WIDGET
-        bar.addView(Ui.button(this, "Autre méthode", primary = false) {
-            app.prefs.loginMethod = other.name
-            intent.putExtra(EXTRA_METHOD, other.name)
-            recreate()
-        }, Ui.lp(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         root.addView(bar)
 
         web = WebView(this)
@@ -82,8 +71,8 @@ class LoginActivity : Activity() {
         web.addJavascriptInterface(Bridge(), "TapisBridge")
         web.webViewClient = Client()
 
-        AppLog.add("Garmin", "Connexion par « ${method.label} »")
-        web.loadUrl(method.firstUrl ?: method.startUrl.also { mainPageLoaded = true })
+        AppLog.add("Garmin", "Ouverture de la page de connexion Garmin")
+        web.loadUrl(GarminConfig.LOGIN_URL)
     }
 
     private inner class Bridge {
@@ -111,11 +100,6 @@ class LoginActivity : Activity() {
 
         override fun onPageFinished(view: WebView, url: String) {
             if (handled.get()) return
-            if (!mainPageLoaded && method.firstUrl != null) {
-                mainPageLoaded = true
-                view.loadUrl(method.startUrl)
-                return
-            }
             injectHooks()
             view.evaluateJavascript("(function(){return document.documentElement.outerHTML})()") { html ->
                 val unescaped = html?.replace("\\u003C", "<")?.replace("\\\"", "\"")?.replace("\\/", "/") ?: return@evaluateJavascript
@@ -133,7 +117,7 @@ class LoginActivity : Activity() {
         return ticketInText.find(decoded)?.groupValues?.get(1)
     }
 
-    /** Intercepte les réponses fetch/XHR de la page (méthode mobile) pour y lire le ticket. */
+    /** Intercepte les réponses fetch/XHR de la page pour y lire le ticket. */
     private fun injectHooks() {
         val js = """
             (function(){
@@ -164,14 +148,13 @@ class LoginActivity : Activity() {
         val app = App.instance
         app.io.execute {
             try {
-                app.garmin.exchangeTicket(ticket, method.serviceUrl)
+                app.garmin.exchangeTicket(ticket, GarminConfig.MOBILE_SERVICE)
                 val name = try {
                     app.garmin.profileName()
                 } catch (_: Exception) {
                     null
                 }
                 app.prefs.garminDisplayName = name
-                app.prefs.loginMethod = method.name
                 runOnUiThread {
                     setResult(RESULT_OK)
                     finish()
@@ -181,12 +164,11 @@ class LoginActivity : Activity() {
                 runOnUiThread {
                     progress.visibility = View.GONE
                     web.visibility = View.VISIBLE
-                    status.text = "Échec : ${e.message}\nRéessaie, ou touche « Autre méthode »."
+                    status.text = "Échec : ${e.message}\nRéessaie de te connecter."
                     status.setTextColor(Ui.ERROR)
                     handled.set(false)
-                    mainPageLoaded = method.firstUrl == null
                     CookieManager.getInstance().removeAllCookies(null)
-                    web.loadUrl(method.firstUrl ?: method.startUrl)
+                    web.loadUrl(GarminConfig.LOGIN_URL)
                 }
             }
         }
@@ -200,9 +182,5 @@ class LoginActivity : Activity() {
     override fun onDestroy() {
         if (::web.isInitialized) web.destroy()
         super.onDestroy()
-    }
-
-    companion object {
-        const val EXTRA_METHOD = "method"
     }
 }

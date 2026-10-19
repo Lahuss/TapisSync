@@ -110,7 +110,13 @@ object Ui {
 
     fun numberField(ctx: Context, value: Double, decimals: Boolean = true, signed: Boolean = false): EditText =
         EditText(ctx).apply {
-            setText(if (value.isNaN()) "" else fr.tapissync.workout.Format.num1(value))
+            setText(
+                when {
+                    value.isNaN() -> ""
+                    !decimals -> Math.round(value).toString()
+                    else -> fr.tapissync.workout.Format.num1(value)
+                },
+            )
             setTextColor(TEXT)
             setHintTextColor(MUTED)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)

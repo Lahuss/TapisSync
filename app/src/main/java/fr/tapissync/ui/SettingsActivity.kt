@@ -30,6 +30,7 @@ class SettingsActivity : Activity() {
     private lateinit var maxKmh: EditText
     private lateinit var endKmh: EditText
     private lateinit var incline: EditText
+    private lateinit var cadence: EditText
     private lateinit var voice: Switch
     private lateinit var beep: Switch
 
@@ -92,6 +93,16 @@ class SettingsActivity : Activity() {
         incline = field(c4, "Pente au départ (%, vide = ne pas toucher)", prefs.startInclinePct, signed = true)
         root.addSpaced(c4, this, 12)
 
+        // Capteur de foulée
+        val c6 = Ui.card(this)
+        c6.addView(Ui.text(this, "Capteur de foulée pour la montre", 17f, bold = true))
+        c6.addSpaced(
+            Ui.text(this, "Le tapis ne mesure pas ta cadence. 0 = cadence nulle envoyée ; tu peux mettre une valeur fixe (ex. 170) si la montre affiche une cadence à zéro.", 14f, Ui.MUTED),
+            this, 4,
+        )
+        cadence = field(c6, "Cadence envoyée (pas/min)", prefs.footpodCadence.toDouble(), decimals = false)
+        root.addSpaced(c6, this, 12)
+
         // Sons
         val c5 = Ui.card(this)
         voice = Switch(this).apply {
@@ -117,10 +128,13 @@ class SettingsActivity : Activity() {
         updateExample()
     }
 
-    private fun field(parent: LinearLayout, label: String, value: Double, signed: Boolean = false): EditText {
+    private fun field(
+        parent: LinearLayout, label: String, value: Double,
+        signed: Boolean = false, decimals: Boolean = true,
+    ): EditText {
         val row = Ui.horizontal(this)
         row.addView(Ui.text(this, label, 15f), Ui.lp(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        val f = Ui.numberField(this, value, signed = signed)
+        val f = Ui.numberField(this, value, decimals = decimals, signed = signed)
         row.addView(f, Ui.lp(Ui.dp(this, 110), LinearLayout.LayoutParams.WRAP_CONTENT))
         parent.addSpaced(row, this, 10)
         return f
@@ -164,6 +178,7 @@ class SettingsActivity : Activity() {
         }
         val end = num(endKmh, "Marche", 0.0, 8.0) ?: return false
         val inc = if (incline.text.isNullOrBlank()) Double.NaN else (num(incline, "Pente", -5.0, 20.0) ?: return false)
+        val cad = num(cadence, "Cadence", 0.0, 250.0) ?: return false
         prefs.speedSettings = SpeedSettings(
             rangePosition = seek.progress / 100.0,
             correctionPct = corr,
@@ -174,6 +189,8 @@ class SettingsActivity : Activity() {
         prefs.startInclinePct = inc
         prefs.voiceEnabled = voice.isChecked
         prefs.beepEnabled = beep.isChecked
+        prefs.footpodCadence = Math.round(cad).toInt()
+        App.instance.footpod.cadence = prefs.footpodCadence
         return true
     }
 }

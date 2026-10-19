@@ -8,6 +8,7 @@ import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
 import fr.tapissync.App
+import fr.tapissync.ble.FootpodBroadcaster
 import fr.tapissync.ble.Ftms
 import fr.tapissync.ble.TreadmillManager
 import fr.tapissync.garmin.GarminException
@@ -19,7 +20,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-class MainActivity : Activity(), TreadmillManager.Listener {
+class MainActivity : Activity(), TreadmillManager.Listener, FootpodBroadcaster.Listener {
 
     private val app get() = App.instance
     private lateinit var root: LinearLayout
@@ -28,6 +29,8 @@ class MainActivity : Activity(), TreadmillManager.Listener {
     private lateinit var garminStatus: TextView
     private lateinit var garminButton: android.widget.Button
     private lateinit var tmStatus: TextView
+    private lateinit var podStatus: TextView
+    private lateinit var podButton: android.widget.Button
     private lateinit var listStatus: TextView
     private lateinit var list: LinearLayout
     private lateinit var tabScheduled: android.widget.Button
@@ -69,6 +72,25 @@ class MainActivity : Activity(), TreadmillManager.Listener {
         }, this, 10)
         root.addSpaced(t, this, 12)
 
+        // Capteur de foulée pour la montre
+        val w = Ui.card(this)
+        w.addView(Ui.text(this, "Montre : capteur de foulée", 18f, bold = true))
+        podStatus = Ui.text(this, "", 15f, Ui.MUTED)
+        w.addSpaced(podStatus, this, 4)
+        podButton = Ui.button(this, "Activer", primary = false) { toggleFootpod() }
+        w.addSpaced(podButton, this, 10)
+        w.addSpaced(
+            Ui.text(
+                this,
+                "Appairage sur la Fenix 8 : Paramètres › Capteurs et accessoires › Ajouter › Foulée " +
+                    "(appelé « Accéléromètre » sur certaines versions). Dans les réglages du capteur, " +
+                    "règle la vitesse et la distance sur « Toujours » ou « Intérieur ».",
+                13f, Ui.MUTED,
+            ),
+            this, 8,
+        )
+        root.addSpaced(w, this, 12)
+
         // Séances
         root.addSpaced(Ui.text(this, "Séances", 22f, bold = true), this, 24)
         val tabs = Ui.horizontal(this)
@@ -103,7 +125,14 @@ class MainActivity : Activity(), TreadmillManager.Listener {
     override fun onResume() {
         super.onResume()
         app.treadmill.listeners.add(this)
+        app.footpod.listeners.add(this)
         autoConnectTreadmill()
+        val pod = app.footpod
+        if (app.prefs.footpodEnabled && pod.hasPermissions() &&
+            (pod.state == FootpodBroadcaster.State.OFF || pod.state == FootpodBroadcaster.State.ERROR)
+        ) {
+            pod.start()
+        }
         refreshStatus()
         val cached = if (showLibrary) app.cachedLibrary else app.cachedScheduled
         if (cached != null) render(cached) else load(false)
@@ -111,6 +140,7 @@ class MainActivity : Activity(), TreadmillManager.Listener {
 
     override fun onPause() {
         app.treadmill.listeners.remove(this)
+        app.footpod.listeners.remove(this)
         super.onPause()
     }
 
@@ -138,7 +168,54 @@ class MainActivity : Activity(), TreadmillManager.Listener {
             garminButton.text = "Se connecter à Garmin"
         }
         updateTreadmillText()
+        updateFootpodText()
     }
+
+    private fun updateFootpodText() {
+        val pod = app.footpod
+        val enabled = app.prefs.footpodEnabled
+        podButton.text = if (enabled) "Désactiver" else "Activer"
+        podStatus.text = when {
+            !enabled -> "Désactivé. Active-le pour envoyer la vitesse du tapis à ta montre."
+            pod.state == FootpodBroadcaster.State.ERROR -> pod.message ?: "Erreur"
+            pod.state == FootpodBroadcaster.State.CONNECTED ->
+                "Connecté à ${pod.connectedNames.joinToString()} · ${Format.kmh(pod.speedKmh)} km/h envoyés"
+            pod.state == FootpodBroadcaster.State.ADVERTISING ->
+                "Visible par la montre sous le nom de cet appareil Android. En attente d'appairage…"
+            pod.state == FootpodBroadcaster.State.OFF && !pod.hasPermissions() -> "Autorisation Bluetooth à accorder."
+            else -> pod.state.label
+        }
+        podStatus.setTextColor(
+            when {
+                !enabled -> Ui.MUTED
+                pod.state == FootpodBroadcaster.State.CONNECTED -> Ui.OK
+                pod.state == FootpodBroadcaster.State.ERROR -> Ui.ERROR
+                else -> Ui.WARN
+            },
+        )
+    }
+
+    private fun toggleFootpod() {
+        val pod = app.footpod
+        if (app.prefs.footpodEnabled) {
+            app.prefs.footpodEnabled = false
+            pod.stop()
+        } else {
+            app.prefs.footpodEnabled = true
+            if (pod.hasPermissions()) pod.start() else requestPermissions(pod.requiredPermissions(), REQ_FOOTPOD)
+        }
+        updateFootpodText()
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQ_FOOTPOD) {
+            if (app.footpod.hasPermissions()) app.footpod.start()
+            updateFootpodText()
+        }
+    }
+
+    override fun onFootpodChanged() = updateFootpodText()
 
     private fun updateTreadmillText() {
         val tm = app.treadmill
@@ -298,5 +375,6 @@ class MainActivity : Activity(), TreadmillManager.Listener {
 
     companion object {
         private const val REQ_LOGIN = 1
+        private const val REQ_FOOTPOD = 2
     }
 }

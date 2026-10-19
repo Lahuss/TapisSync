@@ -58,6 +58,17 @@ class Prefs(context: Context) {
         get() = p.getBoolean("beep", true)
         set(v) = p.edit().putBoolean("beep", v).apply()
 
+    // ---------- Capteur de foulée pour la montre ----------
+
+    var footpodEnabled: Boolean
+        get() = p.getBoolean("footpod", false)
+        set(v) = p.edit().putBoolean("footpod", v).apply()
+
+    /** Cadence envoyée à la montre (pas/min), 0 = aucune. */
+    var footpodCadence: Int
+        get() = p.getInt("footpod_cadence", 0)
+        set(v) = p.edit().putInt("footpod_cadence", v).apply()
+
     // ---------- Tapis ----------
 
     var treadmillAddress: String?
@@ -94,10 +105,6 @@ class Prefs(context: Context) {
     var garminDisplayName: String?
         get() = p.getString("gc_name", null)
         set(v) = p.edit().putString("gc_name", v).apply()
-
-    var loginMethod: String
-        get() = p.getString("login_method", "WIDGET") ?: "WIDGET"
-        set(v) = p.edit().putString("login_method", v).apply()
 
     fun saveTokens(access: String, refresh: String?, clientId: String, expiresInS: Long, refreshExpiresInS: Long?) {
         val now = System.currentTimeMillis()

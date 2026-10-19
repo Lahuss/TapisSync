@@ -28,38 +28,15 @@ data class WorkoutSummary(
     val estimatedSeconds: Double?,
 )
 
-/** Méthodes de connexion proposées dans la page Garmin (WebView). */
-enum class LoginMethod(val label: String, val firstUrl: String?, val startUrl: String, val serviceUrl: String) {
-    WIDGET(
-        label = "Page de connexion classique",
-        firstUrl = "https://sso.garmin.com/sso/embed?id=gauth-widget&embedWidget=true&gauthHost=" +
-            enc("https://sso.garmin.com/sso"),
-        startUrl = "https://sso.garmin.com/sso/signin?id=gauth-widget&embedWidget=true" +
-            "&gauthHost=" + enc(GarminConfig.SSO_EMBED) +
-            "&service=" + enc(GarminConfig.SSO_EMBED) +
-            "&source=" + enc(GarminConfig.SSO_EMBED) +
-            "&redirectAfterAccountLoginUrl=" + enc(GarminConfig.SSO_EMBED) +
-            "&redirectAfterAccountCreationUrl=" + enc(GarminConfig.SSO_EMBED),
-        serviceUrl = GarminConfig.SSO_EMBED,
-    ),
-    MOBILE(
-        label = "Page de connexion mobile",
-        firstUrl = null,
-        startUrl = "https://sso.garmin.com/mobile/sso/en_US/sign-in?clientId=GCM_ANDROID_DARK&service=" +
-            enc(GarminConfig.MOBILE_SERVICE),
-        serviceUrl = GarminConfig.MOBILE_SERVICE,
-    );
-
-    companion object {
-        fun from(name: String?): LoginMethod = values().firstOrNull { it.name == name } ?: WIDGET
-    }
-}
-
 private fun enc(s: String): String = URLEncoder.encode(s, "UTF-8")
 
 object GarminConfig {
-    const val SSO_EMBED = "https://sso.garmin.com/sso/embed"
+    /** Service pour lequel Garmin émet le ticket ; l'échange doit annoncer le même. */
     const val MOBILE_SERVICE = "https://mobile.integration.garmin.com/gcm/android"
+
+    /** Page de connexion de l'appli Garmin Connect mobile (la seule qui fonctionne). */
+    val LOGIN_URL = "https://sso.garmin.com/mobile/sso/en_US/sign-in?clientId=GCM_ANDROID_DARK&service=" +
+        enc(MOBILE_SERVICE)
     const val TOKEN_URL = "https://diauth.garmin.com/di-oauth2-service/oauth/token"
     const val GRANT_SERVICE_TICKET = "https://connectapi.garmin.com/di-oauth2-service/oauth/grant/service_ticket"
     const val API = "https://connectapi.garmin.com"
