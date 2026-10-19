@@ -34,7 +34,7 @@ class RunSessionTest {
         return s
     }
 
-    private fun wait(seconds: Long) = shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(seconds))
+    private fun advance(seconds: Long) = shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(seconds))
 
     @After
     fun tearDown() {
@@ -45,11 +45,11 @@ class RunSessionTest {
     fun stopSignalDuringStartupIsIgnored() {
         val s = newSession()
         s.start()
-        wait(1)
+        advance(1)
         // Le tapis signale un arrêt transitoire pendant son compte à rebours.
         s.onStatus(Ftms.StatusEvent.StoppedByUser(paused = false))
         assertEquals(Phase.RUNNING, s.engine.phase)
-        wait(3)
+        advance(3)
         s.onStatus(Ftms.StatusEvent.StoppedByUser(paused = true))
         assertEquals(Phase.RUNNING, s.engine.phase)
     }
@@ -58,13 +58,13 @@ class RunSessionTest {
     fun consoleStopLaterPausesThenBeltRestartResumes() {
         val s = newSession()
         s.start()
-        wait(30)
+        advance(30)
         s.onStatus(Ftms.StatusEvent.StoppedByUser(paused = true))
         assertEquals(Phase.PAUSED, s.engine.phase)
 
         // Bande relancée depuis la console, sans message « démarré » du tapis.
         repeat(3) {
-            wait(1)
+            advance(1)
             s.onData(Ftms.TreadmillData(speedKmh = 3.0))
         }
         assertEquals(Phase.RUNNING, s.engine.phase)
@@ -74,10 +74,10 @@ class RunSessionTest {
     fun appPauseIsNotUndoneByBeltData() {
         val s = newSession()
         s.start()
-        wait(30)
+        advance(30)
         s.pause()
         repeat(4) {
-            wait(1)
+            advance(1)
             // La bande ralentit encore : ça ne doit pas relancer la séance.
             s.onData(Ftms.TreadmillData(speedKmh = 2.0))
         }
@@ -88,7 +88,7 @@ class RunSessionTest {
     fun safetyKeyAlwaysPauses() {
         val s = newSession()
         s.start()
-        wait(1)
+        advance(1)
         s.onStatus(Ftms.StatusEvent.SafetyKey)
         assertEquals(Phase.PAUSED, s.engine.phase)
     }
