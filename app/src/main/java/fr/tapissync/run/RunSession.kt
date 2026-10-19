@@ -56,6 +56,12 @@ class RunSession(
     private var lastDataMs = 0L
     private var released = false
 
+    /** Dernier ordre de démarrage ou de reprise envoyé au tapis. */
+    private var lastStartCommandMs = -START_GRACE_MS
+    /** Vrai si la pause vient du tapis (console, clé) et non du bouton Pause de l'appli. */
+    private var pausedByTreadmill = false
+    private var beltMovingSinceMs = 0L
+
     private val tick = object : Runnable {
         override fun run() {
             if (released) return
@@ -81,12 +87,14 @@ class RunSession(
         val incline = prefs.startInclinePct
         if (!incline.isNaN()) tm.setIncline(incline)
         tm.start()
+        lastStartCommandMs = SystemClock.elapsedRealtime()
         handle(engine.start())
     }
 
     fun pause() {
         if (engine.phase != WorkoutEngine.Phase.RUNNING) return
         engine.pause()
+        pausedByTreadmill = false
         tm.pause()
         speaker.say("Pause.")
         update()
@@ -95,7 +103,9 @@ class RunSession(
     fun resume() {
         if (engine.phase != WorkoutEngine.Phase.PAUSED) return
         engine.resume()
+        pausedByTreadmill = false
         tm.start()
+        lastStartCommandMs = SystemClock.elapsedRealtime()
         sendTarget()
         speaker.say("Reprise, ${WorkoutEngine.spokenNumber(engine.targetKmh())} kilomètres heure.")
         update()
@@ -202,6 +212,15 @@ class RunSession(
     override fun onData(data: Ftms.TreadmillData) {
         val now = SystemClock.elapsedRealtime()
         data.speedKmh?.let { lastTreadmillSpeed = it }
+        // Pause venue du tapis, puis bande relancée depuis la console : on reprend la séance.
+        if (engine.phase == WorkoutEngine.Phase.PAUSED && pausedByTreadmill) {
+            val moving = (data.speedKmh ?: 0.0) >= 0.8
+            when {
+                !moving -> beltMovingSinceMs = 0L
+                beltMovingSinceMs == 0L -> beltMovingSinceMs = now
+                now - beltMovingSinceMs >= 2000 -> resumeFromTreadmill()
+            }
+        }
         val raw = data.distanceM
         if (raw != null) {
             val prev = lastRawDistance
@@ -238,8 +257,17 @@ class RunSession(
     override fun onStatus(event: Ftms.StatusEvent) {
         when (event) {
             is Ftms.StatusEvent.StoppedByUser, Ftms.StatusEvent.SafetyKey -> {
+                val sinceStart = SystemClock.elapsedRealtime() - lastStartCommandMs
+                if (event is Ftms.StatusEvent.StoppedByUser && sinceStart < START_GRACE_MS) {
+                    // Pendant le démarrage (compte à rebours de la console), certains tapis
+                    // signalent un « arrêt » transitoire : ce n'est pas une vraie pause.
+                    AppLog.add("Séance", "Arrêt signalé pendant le démarrage du tapis : ignoré")
+                    return
+                }
                 if (engine.phase == WorkoutEngine.Phase.RUNNING) {
                     engine.pause()
+                    pausedByTreadmill = true
+                    beltMovingSinceMs = 0L
                     speaker.say("Pause.")
                     showNotice(
                         if (event == Ftms.StatusEvent.SafetyKey) "Clé de sécurité retirée : séance en pause."
@@ -248,11 +276,7 @@ class RunSession(
                 }
             }
             Ftms.StatusEvent.StartedByUser -> {
-                if (engine.phase == WorkoutEngine.Phase.PAUSED) {
-                    engine.resume()
-                    sendTarget()
-                    showNotice("Reprise depuis la console.")
-                }
+                if (engine.phase == WorkoutEngine.Phase.PAUSED && pausedByTreadmill) resumeFromTreadmill()
             }
             is Ftms.StatusEvent.TargetSpeedChanged -> {
                 val sinceCommand = SystemClock.elapsedRealtime() - lastCommandMs
@@ -266,6 +290,17 @@ class RunSession(
             }
             else -> Unit
         }
+    }
+
+    private fun resumeFromTreadmill() {
+        engine.resume()
+        pausedByTreadmill = false
+        beltMovingSinceMs = 0L
+        lastStartCommandMs = SystemClock.elapsedRealtime()
+        AppLog.add("Séance", "Reprise depuis la console du tapis")
+        sendTarget()
+        speaker.say("Reprise.")
+        showNotice("Reprise depuis la console.")
     }
 
     override fun onState(state: TreadmillManager.State, message: String?) {
@@ -283,5 +318,10 @@ class RunSession(
                 }
             else -> Unit
         }
+    }
+
+    companion object {
+        /** Durée pendant laquelle un « arrêt » signalé par le tapis après un démarrage est ignoré. */
+        const val START_GRACE_MS = 10_000L
     }
 }
