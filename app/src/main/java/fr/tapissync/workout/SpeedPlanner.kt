@@ -67,11 +67,11 @@ object SpeedPlanner {
                 why = if (target.fromPace) {
                     val slow = Format.pace(target.slowMps * 3.6)
                     val fast = Format.pace(target.fastMps * 3.6)
-                    if (slow == fast) "Allure $slow /km" else "Allure $fast–$slow /km → ${positionName(s.rangePosition)}"
+                    if (slow == fast) "Allure $slow /km" else "Allure $fast–$slow /km, visée ${positionName(s.rangePosition)}"
                 } else {
                     val a = Format.kmh(target.slowMps * 3.6)
                     val b = Format.kmh(target.fastMps * 3.6)
-                    if (a == b) "Vitesse $a km/h" else "Vitesse $a–$b km/h → ${positionName(s.rangePosition)}"
+                    if (a == b) "Vitesse $a km/h" else "Vitesse $a–$b km/h, visée ${positionName(s.rangePosition)}"
                 }
             }
             else -> {
@@ -139,10 +139,10 @@ object SpeedPlanner {
     }
 
     private fun positionName(p: Double): String = when {
-        p <= 0.01 -> "bout lent"
-        p >= 0.99 -> "bout rapide"
-        abs(p - 0.5) < 0.01 -> "milieu"
-        else -> "${Math.round(p * 100)} % vers le rapide"
+        p <= 0.01 -> "au bout lent"
+        p >= 0.99 -> "au bout rapide"
+        abs(p - 0.5) < 0.01 -> "au milieu"
+        else -> "à ${Math.round(p * 100)} % vers le rapide"
     }
 
     /** Durée estimée d'une étape (s) pour dessiner le profil : 60 s pour une étape manuelle. */

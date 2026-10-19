@@ -181,7 +181,12 @@ object Ui {
             typeface = Ui.display
             includeFontPadding = false
             letterSpacing = -0.01f
-            if (glow) setShadowLayer(dp(ctx, 14).toFloat(), 0f, 0f, 0xAAFF6A00.toInt())
+            if (glow) {
+                val r = dp(ctx, 14)
+                setShadowLayer(r.toFloat(), 0f, 0f, 0xAAFF6A00.toInt())
+                // Marge pour que le halo ne soit pas coupé net au bord du texte.
+                setPadding(r, r / 2, r, r / 2)
+            }
         }
 
     /** Libellés courts, boutons, noms d'étapes. */

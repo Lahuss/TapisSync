@@ -120,17 +120,19 @@ class RunActivity : Activity(), RunSession.Listener {
         speedRow.addView(target)
         speedRow.addView(targetUnit)
         speedBox.addView(speedRow)
-        pace = Ui.display(this, "", if (wideLayout) 40f else 32f, Ui.TEXT)
+        pace = Ui.display(this, "", if (wideLayout) 40f else 32f, Ui.TEXT).apply { gravity = Gravity.CENTER_HORIZONTAL }
         speedBox.addView(pace)
         actual = Ui.text(this, "", 17f, Ui.MUTED).apply { gravity = Gravity.CENTER_HORIZONTAL }
         speedBox.addSpaced(actual, this, 6)
         fullOnly += actual
 
         // Temps ou distance restante
-        val restBox = Ui.vertical(this).apply { gravity = Gravity.CENTER_HORIZONTAL }
-        remaining = Ui.display(this, "", if (wideLayout) 120f else 88f, Ui.TEXT)
+        // En paysage la colonne de droite est alignée à gauche ; en portrait tout est centré.
+        val restGravity = if (wideLayout) Gravity.START else Gravity.CENTER_HORIZONTAL
+        val restBox = Ui.vertical(this)
+        remaining = Ui.display(this, "", if (wideLayout) 120f else 88f, Ui.TEXT).apply { gravity = restGravity }
         restBox.addView(remaining)
-        remainingLabel = Ui.text(this, "", 17f, Ui.MUTED).apply { gravity = Gravity.CENTER_HORIZONTAL }
+        remainingLabel = Ui.text(this, "", 17f, Ui.MUTED).apply { gravity = restGravity }
         restBox.addView(remainingLabel)
         fullOnly += remainingLabel
         progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
@@ -192,7 +194,7 @@ class RunActivity : Activity(), RunSession.Listener {
         row.addView(Ui.button(this, "+ 0,1 km/h", primary = false) { session?.adjust(0.1) }, Ui.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         if (wideLayout) row.addView(Ui.gap(this, 24))
         val nav = if (wideLayout) row else Ui.horizontal(this)
-        nav.addView(Ui.button(this, "Étape précédente", primary = false) { session?.back() }, Ui.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.2f))
+        nav.addView(Ui.button(this, "Précédent", primary = false) { session?.back() }, Ui.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         nav.addView(Ui.gap(this))
         pauseButton = Ui.button(this, "Pause") { togglePause() }
         nav.addView(pauseButton, Ui.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.2f))

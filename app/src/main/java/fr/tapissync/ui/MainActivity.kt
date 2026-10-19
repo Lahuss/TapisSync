@@ -291,14 +291,14 @@ class MainActivity : Activity(), TreadmillManager.Listener {
             val row = Ui.horizontal(this).apply {
                 background = if (isToday) Ui.accentBackground(this@MainActivity) else Ui.rounded(Ui.SURFACE, 4, this@MainActivity)
                 val p = Ui.dp(this@MainActivity, 16)
-                setPadding(p + if (isToday) Ui.dp(this@MainActivity, 4) else 0, p, p, p)
+                setPadding(p + Ui.dp(this@MainActivity, 4), p, p, p)
                 isClickable = true
                 isFocusable = true
                 setOnClickListener { open(w) }
             }
             if (d != null) {
                 val dateBlock = Ui.vertical(this).apply { gravity = Gravity.CENTER_HORIZONTAL }
-                dateBlock.addView(Ui.display(this, d.dayOfMonth.toString(), 34f, if (isToday) Ui.ACCENT else Ui.TEXT, glow = isToday))
+                dateBlock.addView(Ui.display(this, d.dayOfMonth.toString(), 34f, if (isToday) Ui.ACCENT else Ui.TEXT))
                 dateBlock.addView(Ui.label(this, d.format(dayFmt), 15f, Ui.MUTED))
                 row.addView(dateBlock, Ui.lp(Ui.dp(this, 56), ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                     marginEnd = Ui.dp(this@MainActivity, 16)
