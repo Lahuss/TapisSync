@@ -31,7 +31,14 @@ import java.util.concurrent.CopyOnWriteArraySet
  * Tout tourne sur le fil principal ; les callbacks Bluetooth y sont renvoyés.
  */
 @SuppressLint("MissingPermission")
-class FootpodBroadcaster(context: Context) : TreadmillManager.Listener {
+class FootpodBroadcaster(
+    context: Context,
+    /**
+     * Adresse du tapis. Android signale au serveur toutes les liaisons Bluetooth de l'appareil,
+     * y compris celle vers le tapis : on l'ignore pour ne pas la prendre pour la montre.
+     */
+    private val treadmillAddress: () -> String? = { null },
+) : TreadmillManager.Listener {
 
     enum class State(val label: String) {
         OFF("Désactivé"),
@@ -357,6 +364,7 @@ class FootpodBroadcaster(context: Context) : TreadmillManager.Listener {
         override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
             main.post {
                 if (server == null) return@post
+                if (device.address.equals(treadmillAddress(), ignoreCase = true)) return@post
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
                     devices[device.address] = device
                     AppLog.add("Foulée", "Montre connectée : ${safeName(device) ?: device.address}")

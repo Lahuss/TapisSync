@@ -162,10 +162,15 @@ class TreadmillManager(context: Context) {
         reconnectDelayMs = 2000L
         deviceAddress = address
         deviceName = name ?: deviceName
-        openGatt()
+        openGatt(background = false)
     }
 
-    private fun openGatt() {
+    /**
+     * background = false : connexion directe (rapide, abandon au bout de ~30 s).
+     * background = true : connexion « en veille », sans délai : Android se connecte dès que
+     * le tapis est allumé, sans occuper la radio en continu.
+     */
+    private fun openGatt(background: Boolean) {
         val address = deviceAddress ?: return
         val device = try {
             adapter?.getRemoteDevice(address)
@@ -176,9 +181,9 @@ class TreadmillManager(context: Context) {
             return
         }
         if (deviceName == null) deviceName = safeName(device)
-        setState(State.CONNECTING, null)
-        AppLog.add("BLE", "Connexion à ${deviceName ?: address}")
-        gatt = device.connectGatt(ctx, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+        setState(State.CONNECTING, if (background) "en attente du tapis : allume-le" else null)
+        AppLog.add("BLE", "${if (background) "En attente de" else "Connexion à"} ${deviceName ?: address}")
+        gatt = device.connectGatt(ctx, background, gattCallback, BluetoothDevice.TRANSPORT_LE)
     }
 
     fun disconnect() {
@@ -203,15 +208,13 @@ class TreadmillManager(context: Context) {
     }
 
     private val reconnectRunnable = Runnable {
-        if (wantConnected && state == State.DISCONNECTED) openGatt()
+        if (wantConnected && state == State.DISCONNECTED) openGatt(background = true)
     }
 
     private fun scheduleReconnect() {
         if (!wantConnected) return
-        AppLog.add("BLE", "Nouvelle tentative dans ${reconnectDelayMs / 1000} s")
         main.removeCallbacks(reconnectRunnable)
         main.postDelayed(reconnectRunnable, reconnectDelayMs)
-        reconnectDelayMs = (reconnectDelayMs * 2).coerceAtMost(15000L)
     }
 
     private fun setState(s: State, msg: String?) {
@@ -444,7 +447,7 @@ class TreadmillManager(context: Context) {
                 } else {
                     AppLog.add("BLE", "Déconnecté (statut $status, état $newState)")
                     closeGatt()
-                    setState(State.DISCONNECTED, if (status != 0) "Connexion perdue (code $status)" else null)
+                    setState(State.DISCONNECTED, if (status != 0) statusText(status) else null)
                     scheduleReconnect()
                 }
             }
@@ -568,6 +571,16 @@ class TreadmillManager(context: Context) {
             AppLog.add("BLE", "Lecture $uuid refusée (statut $status)")
         }
         if (current is Op.Read) completeCurrent()
+    }
+
+    private fun statusText(status: Int): String = when (status) {
+        8 -> "signal perdu (code 8)"
+        19 -> "déconnecté par le tapis (code 19)"
+        22 -> "déconnecté par la tablette (code 22)"
+        62 -> "connexion impossible (code 62)"
+        133 -> "erreur Bluetooth (code 133)"
+        147 -> "tapis introuvable : éteint ou hors de portée (code 147)"
+        else -> "connexion perdue (code $status)"
     }
 
     private fun props(p: Int): String = buildList {

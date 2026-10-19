@@ -46,7 +46,7 @@ class App : Application() {
         prefs = Prefs(this)
         garmin = GarminClient(prefs)
         treadmill = TreadmillManager(this)
-        footpod = FootpodBroadcaster(this).apply { cadence = prefs.footpodCadence }
+        footpod = FootpodBroadcaster(this) { treadmill.deviceAddress }.apply { cadence = prefs.footpodCadence }
         treadmill.listeners.add(footpod)
         notificationManager = getSystemService(NotificationManager::class.java)
         notificationManager.createNotificationChannel(
