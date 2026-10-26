@@ -133,6 +133,9 @@ class BarView(ctx: Context, private val onOpen: () -> Unit) : LinearLayout(ctx) 
         orientation = VERTICAL
         setBackgroundColor(0xF2000000.toInt())
         isClickable = true
+        // Le halo orange de la vitesse doit pouvoir déborder de son cadre sans être coupé.
+        clipChildren = false
+        clipToPadding = false
 
         // Liseré orange en haut : la bande LED du tapis.
         addView(View(ctx).apply {
@@ -143,6 +146,8 @@ class BarView(ctx: Context, private val onOpen: () -> Unit) : LinearLayout(ctx) 
         }, LayoutParams(LayoutParams.MATCH_PARENT, Ui.dp(ctx, 3)))
 
         content = Ui.horizontal(ctx).apply {
+            clipChildren = false
+            clipToPadding = false
             val h = Ui.dp(ctx, 16)
             setPadding(h, Ui.dp(ctx, 8), h, Ui.dp(ctx, 8))
         }
@@ -157,7 +162,11 @@ class BarView(ctx: Context, private val onOpen: () -> Unit) : LinearLayout(ctx) 
         content.addView(stepBox, Ui.lp(Ui.dp(ctx, if (wide) 260 else 150), ViewGroup.LayoutParams.WRAP_CONTENT))
 
         // Vitesse cible
-        val speedRow = Ui.horizontal(ctx).apply { gravity = Gravity.BOTTOM }
+        val speedRow = Ui.horizontal(ctx).apply {
+            gravity = Gravity.BOTTOM
+            clipChildren = false
+            clipToPadding = false
+        }
         speed = Ui.display(ctx, "--", 46f, Ui.ACCENT, glow = true).apply {
             // Marge du halo réduite à droite pour garder « km/h » collé au chiffre.
             setPadding(Ui.dp(ctx, 6), 0, Ui.dp(ctx, 4), 0)
