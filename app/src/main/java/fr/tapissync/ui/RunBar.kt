@@ -158,7 +158,10 @@ class BarView(ctx: Context, private val onOpen: () -> Unit) : LinearLayout(ctx) 
 
         // Vitesse cible
         val speedRow = Ui.horizontal(ctx).apply { gravity = Gravity.BOTTOM }
-        speed = Ui.display(ctx, "--", 46f, Ui.ACCENT, glow = true)
+        speed = Ui.display(ctx, "--", 46f, Ui.ACCENT, glow = true).apply {
+            // Marge du halo réduite à droite pour garder « km/h » collé au chiffre.
+            setPadding(Ui.dp(ctx, 6), 0, Ui.dp(ctx, 4), 0)
+        }
         speedUnit = Ui.label(ctx, "km/h", 16f, Ui.MUTED).apply { setPadding(0, 0, 0, Ui.dp(ctx, 8)) }
         speedRow.addView(speed)
         speedRow.addView(speedUnit)
@@ -183,17 +186,33 @@ class BarView(ctx: Context, private val onOpen: () -> Unit) : LinearLayout(ctx) 
             marginEnd = Ui.dp(ctx, 20)
         })
 
-        // Boutons
+        // Boutons : à droite sur tablette, sur une deuxième ligne sur un écran étroit.
         minus = small(Ui.button(ctx, "−0,1", primary = false) { session?.adjust(-0.1) })
         plus = small(Ui.button(ctx, "+0,1", primary = false) { session?.adjust(0.1) })
-        main = small(Ui.button(ctx, "Pause") { onMain() }, minDp = 104)
+        main = small(Ui.button(ctx, "Pause") { onMain() }, minDp = if (wide) 104 else 0)
         next = small(Ui.button(ctx, "Suivant", primary = false) { session?.skip() })
         open = small(Ui.button(ctx, "Ouvrir", primary = false) { onOpen() })
-        toggle = small(Ui.button(ctx, "", primary = false) { toggleCollapsed() }, minDp = 48)
-        for (b in listOf(minus, plus, main, next, open, toggle)) {
-            content.addView(b, Ui.lp(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                marginStart = Ui.dp(ctx, 8)
-            })
+        toggle = small(Ui.button(ctx, "", primary = false) { toggleCollapsed() }, minDp = if (wide) 48 else 0)
+        val buttons = listOf(minus to 1f, plus to 1f, main to 1.4f, next to 1.2f, open to 1.1f, toggle to 0.7f)
+        if (wide) {
+            for ((b, _) in buttons) {
+                content.addView(b, Ui.lp(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    marginStart = Ui.dp(ctx, 8)
+                })
+            }
+        } else {
+            val row = Ui.horizontal(ctx).apply {
+                val h = Ui.dp(ctx, 12)
+                setPadding(h, 0, h, Ui.dp(ctx, 10))
+            }
+            buttons.forEachIndexed { i, (b, w) ->
+                b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                b.setPadding(Ui.dp(ctx, 4), b.paddingTop, Ui.dp(ctx, 4), b.paddingBottom)
+                row.addView(b, Ui.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, w).apply {
+                    if (i > 0) marginStart = Ui.dp(ctx, 6)
+                })
+            }
+            addView(row, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         }
         applyCollapsed()
     }
