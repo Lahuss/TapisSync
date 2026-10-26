@@ -3,11 +3,16 @@ package fr.tapissync
 import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Shader
+import android.view.ContextThemeWrapper
 import android.os.Looper
 import android.view.View.MeasureSpec
 import fr.tapissync.ble.Ftms
 import fr.tapissync.garmin.WorkoutSummary
 import fr.tapissync.run.RunSession
+import fr.tapissync.ui.BarView
 import fr.tapissync.ui.MainActivity
 import fr.tapissync.ui.PreviewActivity
 import fr.tapissync.ui.RunActivity
@@ -107,6 +112,60 @@ class ScreensTest {
         capture(act, name)
         s.release()
         app.session = null
+    }
+
+    /** Bandeau dessiné en bas d'un écran factice qui figure une vidéo Kinomap ou Netflix. */
+    private fun captureBar(name: String, collapsed: Boolean) {
+        val app = App.instance
+        app.prefs.barCollapsed = collapsed
+        val w = workout()
+        val s = RunSession(app, w, SpeedPlanner.plan(w, app.prefs.speedSettings))
+        s.start()
+        var dist = 0
+        for (i in 0 until 700) {
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
+            val warm = i < 600
+            dist += if (warm) 2 else 3
+            s.onData(Ftms.TreadmillData(speedKmh = if (warm) 9.0 else 12.6, distanceM = dist))
+        }
+        val bar = BarView(ContextThemeWrapper(app, R.style.AppTheme)) {}
+        bar.bind(s)
+        val dm = app.resources.displayMetrics
+        bar.measure(
+            MeasureSpec.makeMeasureSpec(dm.widthPixels, MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED),
+        )
+        bar.layout(0, 0, dm.widthPixels, bar.measuredHeight)
+        val bmp = Bitmap.createBitmap(dm.widthPixels, dm.heightPixels, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        val p = Paint().apply {
+            shader = LinearGradient(0f, 0f, dm.widthPixels.toFloat(), dm.heightPixels.toFloat(),
+                0xFF2B4A63.toInt(), 0xFF0E1A24.toInt(), Shader.TileMode.CLAMP)
+        }
+        c.drawRect(0f, 0f, dm.widthPixels.toFloat(), dm.heightPixels.toFloat(), p)
+        val label = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x66FFFFFF; textSize = dm.density * 28 }
+        c.drawText("Vidéo Kinomap ou Netflix", dm.density * 32, dm.density * 56, label)
+        c.save()
+        c.translate(0f, (dm.heightPixels - bar.measuredHeight).toFloat())
+        bar.draw(c)
+        c.restore()
+        val dir = File("build/screens").apply { mkdirs() }
+        FileOutputStream(File(dir, "$name.png")).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        s.release()
+        app.prefs.barCollapsed = false
+    }
+
+    @Test
+    @Config(qualifiers = "w1280dp-h720dp-land-hdpi")
+    fun bandeauTablette() {
+        captureBar("tablette-bandeau", collapsed = false)
+        captureBar("tablette-bandeau-reduit", collapsed = true)
+    }
+
+    @Test
+    @Config(qualifiers = "w400dp-h880dp-port-xxhdpi")
+    fun bandeauTelephone() {
+        captureBar("telephone-bandeau", collapsed = false)
     }
 
     @Test

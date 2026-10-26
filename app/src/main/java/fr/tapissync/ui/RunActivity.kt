@@ -8,6 +8,7 @@ import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Rational
 import android.util.TypedValue
 import android.view.Gravity
@@ -227,6 +228,11 @@ class RunActivity : Activity(), RunSession.Listener {
         onUpdate()
     }
 
+    override fun onStart() {
+        super.onStart()
+        app.bar.activityVisible = true
+    }
+
     override fun onPause() {
         // En mode incrusté l'activité est en pause mais reste visible : on garde l'abonnement.
         if (!isInPictureInPictureMode) session?.listeners?.remove(this)
@@ -236,6 +242,8 @@ class RunActivity : Activity(), RunSession.Listener {
     override fun onStop() {
         session?.listeners?.remove(this)
         super.onStop()
+        // L'écran de séance n'est plus visible : le bandeau prend le relais.
+        app.bar.activityVisible = false
     }
 
     override fun onUpdate() {
@@ -313,7 +321,7 @@ class RunActivity : Activity(), RunSession.Listener {
             endSummary.text = "Séance terminée en ${Format.duration(e.totalElapsedMs() / 1000.0)} pour ${Format.distance(e.totalDistanceM)}.\n" +
                 "Pense à arrêter l'activité sur ta montre."
         }
-        updatePipParams(e.phase == Phase.RUNNING || e.phase == Phase.PAUSED)
+        updatePipParams((e.phase == Phase.RUNNING || e.phase == Phase.PAUSED) && !barMode())
     }
 
     private fun togglePause() {
@@ -333,9 +341,13 @@ class RunActivity : Activity(), RunSession.Listener {
     private fun close() {
         session?.release()
         app.session = null
+        app.bar.refresh()
         WorkoutService.stop(this)
         finish()
     }
+
+    /** Bandeau activé et autorisé : il remplace la fenêtre incrustée. */
+    private fun barMode(): Boolean = app.prefs.barEnabled && Settings.canDrawOverlays(this)
 
     // ---------- Mode incrusté ----------
 
@@ -365,7 +377,7 @@ class RunActivity : Activity(), RunSession.Listener {
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         val phase = session?.engine?.phase
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && pipSupported() &&
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && pipSupported() && !barMode() &&
             (phase == Phase.RUNNING || phase == Phase.PAUSED)
         ) {
             try {
@@ -391,6 +403,11 @@ class RunActivity : Activity(), RunSession.Listener {
     @Deprecated("API Activity simple, sans AndroidX")
     override fun onBackPressed() {
         val phase = session?.engine?.phase
+        if ((phase == Phase.RUNNING || phase == Phase.PAUSED) && barMode()) {
+            // Retour : la séance continue, l'écran passe en bandeau.
+            moveTaskToBack(true)
+            return
+        }
         if ((phase == Phase.RUNNING || phase == Phase.PAUSED) && pipSupported()) {
             try {
                 enterPictureInPictureMode(pipParams())

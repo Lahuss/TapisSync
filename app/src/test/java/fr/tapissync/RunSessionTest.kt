@@ -97,11 +97,28 @@ class RunSessionTest {
 
     @Test
     fun consoleSpeedChangeLaterIsKeptForTheStep() {
+        App.instance.prefs.lockSpeed = false
         val s = newSession()
         s.start()
         advance(30)
         s.onStatus(Ftms.StatusEvent.TargetSpeedChanged(11.0))
         assertEquals(11.0, s.engine.targetKmh(), 1e-9)
+    }
+
+    @Test
+    fun lockedSpeedIgnoresChangesFromOtherApps() {
+        App.instance.prefs.lockSpeed = true
+        val s = newSession()
+        s.start()
+        advance(30)
+        // Kinomap (ou la console) change la vitesse : TapisSync garde celle de l'étape.
+        s.onStatus(Ftms.StatusEvent.TargetSpeedChanged(6.0))
+        advance(2)
+        assertEquals(10.0, s.engine.targetKmh(), 1e-9)
+        assertEquals(0.0, s.engine.adjustKmh, 1e-9)
+        // Les boutons ± de TapisSync restent la façon d'ajuster.
+        s.adjust(0.3)
+        assertEquals(10.3, s.engine.targetKmh(), 1e-9)
     }
 
     @Test

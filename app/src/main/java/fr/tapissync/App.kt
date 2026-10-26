@@ -28,6 +28,10 @@ class App : Application() {
     /** Séance en cours, s'il y en a une. */
     var session: RunSession? = null
 
+    /** Bandeau de séance affiché par-dessus les autres applis. */
+    lateinit var bar: fr.tapissync.ui.RunBar
+        private set
+
     /** Séance choisie, transmise à l'écran d'aperçu. */
     var selectedWorkout: Workout? = null
 
@@ -42,6 +46,7 @@ class App : Application() {
         prefs = Prefs(this)
         garmin = GarminClient(prefs)
         treadmill = TreadmillManager(this)
+        bar = fr.tapissync.ui.RunBar(this)
         notificationManager = getSystemService(NotificationManager::class.java)
         notificationManager.createNotificationChannel(
             NotificationChannel(CHANNEL_RUN, "Séance en cours", NotificationManager.IMPORTANCE_LOW).apply {

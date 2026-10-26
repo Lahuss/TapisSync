@@ -229,6 +229,26 @@ class PreviewActivity : Activity(), TreadmillManager.Listener {
     }
 
     private fun launch() {
+        val prefs = app.prefs
+        if (prefs.barEnabled && !android.provider.Settings.canDrawOverlays(this) && !prefs.overlayPrompted) {
+            // Proposé une seule fois ; ensuite le réglage reste accessible dans Réglages.
+            prefs.overlayPrompted = true
+            AlertDialog.Builder(this)
+                .setTitle("Bandeau pendant la séance")
+                .setMessage(
+                    "Pour garder TapisSync en bandeau en bas de l'écran pendant que tu regardes Kinomap ou Netflix, " +
+                        "autorise l'affichage par-dessus les autres applis, puis reviens et touche Démarrer la séance.\n\n" +
+                        "Si l'option est grisée : Paramètres › Applis › TapisSync › menu ⋮ › Autoriser les paramètres restreints.",
+                )
+                .setPositiveButton("Autoriser") { _, _ ->
+                    startActivity(
+                        Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:$packageName")),
+                    )
+                }
+                .setNegativeButton("Plus tard") { _, _ -> launch() }
+                .show()
+            return
+        }
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {

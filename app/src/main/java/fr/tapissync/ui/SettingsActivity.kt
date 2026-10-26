@@ -1,7 +1,10 @@
 package fr.tapissync.ui
 
 import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.SeekBar
@@ -31,6 +34,10 @@ class SettingsActivity : Activity() {
     private lateinit var maxKmh: EditText
     private lateinit var endKmh: EditText
     private lateinit var incline: EditText
+    private lateinit var bar: Switch
+    private lateinit var lock: Switch
+    private lateinit var overlayStatus: Ui.StatusLine
+    private lateinit var overlayButton: android.widget.Button
     private lateinit var voice: Switch
     private lateinit var beep: Switch
 
@@ -95,6 +102,43 @@ class SettingsActivity : Activity() {
         incline = field(c4, "Pente au départ (%, vide = ne pas toucher)", prefs.startInclinePct, signed = true)
         root.addSpaced(c4, this, 12)
 
+        // Pendant la séance
+        val c7 = Ui.card(this)
+        c7.addView(Ui.label(this, "Pendant la séance", 21f))
+        bar = Switch(this).apply {
+            text = "Bandeau en bas de l'écran quand tu ouvres une autre appli"
+            setTextColor(Ui.TEXT)
+            textSize = 16f
+            isChecked = prefs.barEnabled
+        }
+        c7.addSpaced(bar, this, 12)
+        c7.addSpaced(
+            Ui.text(this, "Le bandeau reste par-dessus Kinomap, Netflix ou YouTube et laisse le reste de l'écran utilisable. Sans lui, l'écran de séance passe en petite fenêtre flottante.", 14f, Ui.MUTED),
+            this, 4,
+        )
+        overlayStatus = Ui.status(this)
+        c7.addSpaced(overlayStatus, this, 12)
+        overlayButton = Ui.button(this, "Autoriser l'affichage par-dessus les autres applis", primary = false) {
+            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+        }
+        c7.addSpaced(overlayButton, this, 10)
+        c7.addSpaced(
+            Ui.text(this, "Si l'option est grisée : Paramètres › Applis › TapisSync › menu ⋮ › Autoriser les paramètres restreints, puis réessaie.", 14f, Ui.MUTED),
+            this, 6,
+        )
+        lock = Switch(this).apply {
+            text = "Seul TapisSync règle la vitesse"
+            setTextColor(Ui.TEXT)
+            textSize = 16f
+            isChecked = prefs.lockSpeed
+        }
+        c7.addSpaced(lock, this, 20)
+        c7.addSpaced(
+            Ui.text(this, "Si la vitesse est changée par la console ou une autre appli comme Kinomap, TapisSync remet celle de l'étape. Ajuste-la avec les boutons ± de TapisSync. Désactive-le pour garder les changements faits sur la console.", 14f, Ui.MUTED),
+            this, 4,
+        )
+        root.addSpaced(c7, this, 12)
+
         // Sons
         val c5 = Ui.card(this)
         voice = Switch(this).apply {
@@ -118,6 +162,16 @@ class SettingsActivity : Activity() {
             }
         }, this, 20)
         updateExample()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val ok = Settings.canDrawOverlays(this)
+        overlayStatus.set(
+            if (ok) "Affichage par-dessus les autres applis autorisé" else "Affichage par-dessus les autres applis non autorisé",
+            if (ok) Ui.OK else Ui.WARN,
+        )
+        overlayButton.visibility = if (ok) android.view.View.GONE else android.view.View.VISIBLE
     }
 
     private fun field(
@@ -181,6 +235,8 @@ class SettingsActivity : Activity() {
         prefs.startInclinePct = inc
         prefs.voiceEnabled = voice.isChecked
         prefs.beepEnabled = beep.isChecked
+        prefs.barEnabled = bar.isChecked
+        prefs.lockSpeed = lock.isChecked
         return true
     }
 }
