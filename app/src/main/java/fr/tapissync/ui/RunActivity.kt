@@ -3,6 +3,7 @@ package fr.tapissync.ui
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.PictureInPictureParams
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.content.res.Configuration
@@ -56,6 +57,7 @@ class RunActivity : Activity(), RunSession.Listener {
     private lateinit var endBox: LinearLayout
     private lateinit var endSummary: TextView
     private lateinit var pauseButton: Button
+    private lateinit var toBarButton: Button
 
     /** Éléments masqués en fenêtre incrustée. */
     private val fullOnly = mutableListOf<View>()
@@ -104,6 +106,16 @@ class RunActivity : Activity(), RunSession.Listener {
         top.addView(stepLabel, Ui.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         stepCount = Ui.label(this, "", if (wideLayout) 22f else 18f, Ui.MUTED)
         top.addView(stepCount)
+        // Flèche descendante : passer en bandeau en bas de l'écran.
+        toBarButton = Ui.button(this, "▼", primary = false) { goToBar() }.apply {
+            contentDescription = "Passer en bandeau"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+            minWidth = Ui.dp(this@RunActivity, 64)
+            minimumWidth = Ui.dp(this@RunActivity, 64)
+        }
+        top.addView(toBarButton, Ui.lp(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            marginStart = Ui.dp(this@RunActivity, 16)
+        })
         root.addView(top)
         fullOnly += top
 
@@ -317,6 +329,7 @@ class RunActivity : Activity(), RunSession.Listener {
         controls.visibility = if (!inPip && (e.phase == Phase.RUNNING || e.phase == Phase.PAUSED)) View.VISIBLE else View.GONE
         endBox.visibility = if (!inPip && finished) View.VISIBLE else View.GONE
         pauseButton.text = if (e.phase == Phase.PAUSED) "Reprendre" else "Pause"
+        toBarButton.visibility = if (finished) View.GONE else View.VISIBLE
         if (finished) {
             endSummary.text = "Séance terminée en ${Format.duration(e.totalElapsedMs() / 1000.0)} pour ${Format.distance(e.totalDistanceM)}.\n" +
                 "Pense à arrêter l'activité sur ta montre."
@@ -344,6 +357,28 @@ class RunActivity : Activity(), RunSession.Listener {
         app.bar.refresh()
         WorkoutService.stop(this)
         finish()
+    }
+
+    /** Flèche ▼ : l'écran de séance laisse la place au bandeau en bas de l'écran. */
+    private fun goToBar() {
+        when {
+            barMode() -> moveTaskToBack(true)
+            app.prefs.barEnabled -> AlertDialog.Builder(this)
+                .setTitle("Passer en bandeau")
+                .setMessage(
+                    "Pour afficher TapisSync en bandeau par-dessus les autres applis, autorise l'affichage par-dessus les autres applis.\n\n" +
+                        "Si l'option est grisée : Paramètres › Applis › TapisSync › menu ⋮ › Autoriser les paramètres restreints.",
+                )
+                .setPositiveButton("Autoriser") { _, _ ->
+                    startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:$packageName")))
+                }
+                .setNegativeButton("Annuler", null)
+                .show()
+            pipSupported() -> try {
+                enterPictureInPictureMode(pipParams())
+            } catch (_: Exception) {
+            }
+        }
     }
 
     /** Bandeau activé et autorisé : il remplace la fenêtre incrustée. */

@@ -55,10 +55,6 @@ class Prefs(context: Context) {
         get() = p.getBoolean("bar", true)
         set(v) = p.edit().putBoolean("bar", v).apply()
 
-    var barCollapsed: Boolean
-        get() = p.getBoolean("bar_collapsed", false)
-        set(v) = p.edit().putBoolean("bar_collapsed", v).apply()
-
     /** Demande d'autorisation du bandeau déjà proposée une fois. */
     var overlayPrompted: Boolean
         get() = p.getBoolean("overlay_prompted", false)

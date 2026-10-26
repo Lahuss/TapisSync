@@ -104,13 +104,11 @@ class RunBar(private val app: App) : RunSession.Listener {
 
 /**
  * Contenu du bandeau. Séparé de la fenêtre pour pouvoir le dessiner dans les tests.
- * Version complète : étape, vitesse, temps restant, profil LED, boutons.
- * Version réduite : vitesse, temps restant, Pause et Ouvrir.
+ * Étape, vitesse, temps restant, profil LED, boutons, et flèche ▲ vers le plein écran.
  */
 class BarView(ctx: Context, private val onOpen: () -> Unit) : LinearLayout(ctx) {
 
     private var session: RunSession? = null
-    private val prefs get() = App.instance.prefs
     private val wide = ctx.resources.configuration.screenWidthDp >= 720
 
     private val title: TextView
@@ -124,8 +122,7 @@ class BarView(ctx: Context, private val onOpen: () -> Unit) : LinearLayout(ctx) 
     private val plus: Button
     private val main: Button
     private val next: Button
-    private val open: Button
-    private val toggle: Button
+    private val expand: Button
     private val stepBox: LinearLayout
     private val content: LinearLayout
 
@@ -200,9 +197,12 @@ class BarView(ctx: Context, private val onOpen: () -> Unit) : LinearLayout(ctx) 
         plus = small(Ui.button(ctx, "+0,1", primary = false) { session?.adjust(0.1) })
         main = small(Ui.button(ctx, "Pause") { onMain() }, minDp = if (wide) 104 else 0)
         next = small(Ui.button(ctx, "Suivant", primary = false) { session?.skip() })
-        open = small(Ui.button(ctx, "Ouvrir", primary = false) { onOpen() })
-        toggle = small(Ui.button(ctx, "", primary = false) { toggleCollapsed() }, minDp = if (wide) 48 else 0)
-        val buttons = listOf(minus to 1f, plus to 1f, main to 1.4f, next to 1.2f, open to 1.1f, toggle to 0.7f)
+        // Flèche montante : retour à l'écran de séance en plein écran.
+        expand = small(Ui.button(ctx, "▲", primary = false) { onOpen() }, minDp = if (wide) 64 else 0).apply {
+            contentDescription = "Passer en plein écran"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+        }
+        val buttons = listOf(minus to 1f, plus to 1f, main to 1.4f, next to 1.2f, expand to 0.9f)
         if (wide) {
             for ((b, _) in buttons) {
                 content.addView(b, Ui.lp(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
@@ -215,7 +215,7 @@ class BarView(ctx: Context, private val onOpen: () -> Unit) : LinearLayout(ctx) 
                 setPadding(h, 0, h, Ui.dp(ctx, 10))
             }
             buttons.forEachIndexed { i, (b, w) ->
-                b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                if (b !== expand) b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
                 b.setPadding(Ui.dp(ctx, 4), b.paddingTop, Ui.dp(ctx, 4), b.paddingBottom)
                 row.addView(b, Ui.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, w).apply {
                     if (i > 0) marginStart = Ui.dp(ctx, 6)
@@ -223,7 +223,14 @@ class BarView(ctx: Context, private val onOpen: () -> Unit) : LinearLayout(ctx) 
             }
             addView(row, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         }
-        applyCollapsed()
+        if (!wide) {
+            // Écran étroit : pas de profil, le bloc de l'étape prend la place libre.
+            profile.visibility = View.GONE
+            (stepBox.layoutParams as LayoutParams).apply {
+                width = 0
+                weight = 1f
+            }
+        }
     }
 
     private fun TextView.singleLine() {
@@ -255,32 +262,6 @@ class BarView(ctx: Context, private val onOpen: () -> Unit) : LinearLayout(ctx) 
             Phase.PAUSED -> s.resume()
             Phase.FINISHED -> onOpen()
         }
-    }
-
-    private fun toggleCollapsed() {
-        prefs.barCollapsed = !prefs.barCollapsed
-        applyCollapsed()
-        update()
-    }
-
-    private fun applyCollapsed() {
-        val c = prefs.barCollapsed
-        toggle.text = if (c) "▲" else "▼"
-        val full = if (c) View.GONE else View.VISIBLE
-        sub.visibility = full
-        minus.visibility = full
-        plus.visibility = full
-        next.visibility = full
-        profile.visibility = if (c || !wide) View.GONE else View.VISIBLE
-        remainingLabel.visibility = full
-        speed.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (c) 32f else 46f)
-        remaining.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (c) 28f else 36f)
-        // En version réduite, le profil disparaît : un espace élastique garde les boutons à droite.
-        (stepBox.layoutParams as LayoutParams).apply {
-            width = if (c || !wide) 0 else Ui.dp(context, 260)
-            weight = if (c || !wide) 1f else 0f
-        }
-        stepBox.requestLayout()
     }
 
     fun update() {
@@ -347,9 +328,8 @@ class BarView(ctx: Context, private val onOpen: () -> Unit) : LinearLayout(ctx) 
             Phase.FINISHED -> "Terminer"
         }
         val running = e.phase == Phase.RUNNING || e.phase == Phase.PAUSED
-        val full = !prefs.barCollapsed
-        minus.visibility = if (full && running) View.VISIBLE else View.GONE
-        plus.visibility = if (full && running) View.VISIBLE else View.GONE
-        next.visibility = if (full && running) View.VISIBLE else View.GONE
+        minus.visibility = if (running) View.VISIBLE else View.GONE
+        plus.visibility = if (running) View.VISIBLE else View.GONE
+        next.visibility = if (running) View.VISIBLE else View.GONE
     }
 }

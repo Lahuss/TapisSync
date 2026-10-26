@@ -115,9 +115,8 @@ class ScreensTest {
     }
 
     /** Bandeau dessiné en bas d'un écran factice qui figure une vidéo Kinomap ou Netflix. */
-    private fun captureBar(name: String, collapsed: Boolean) {
+    private fun captureBar(name: String) {
         val app = App.instance
-        app.prefs.barCollapsed = collapsed
         val w = workout()
         val s = RunSession(app, w, SpeedPlanner.plan(w, app.prefs.speedSettings))
         s.start()
@@ -152,20 +151,18 @@ class ScreensTest {
         val dir = File("build/screens").apply { mkdirs() }
         FileOutputStream(File(dir, "$name.png")).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         s.release()
-        app.prefs.barCollapsed = false
     }
 
     @Test
     @Config(qualifiers = "w1280dp-h720dp-land-hdpi")
     fun bandeauTablette() {
-        captureBar("tablette-bandeau", collapsed = false)
-        captureBar("tablette-bandeau-reduit", collapsed = true)
+        captureBar("tablette-bandeau")
     }
 
     @Test
     @Config(qualifiers = "w400dp-h880dp-port-xxhdpi")
     fun bandeauTelephone() {
-        captureBar("telephone-bandeau", collapsed = false)
+        captureBar("telephone-bandeau")
     }
 
     @Test
