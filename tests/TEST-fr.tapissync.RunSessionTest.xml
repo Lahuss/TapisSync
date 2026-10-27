@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="fr.tapissync.RunSessionTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-10-27T08:07:38.910Z" hostname="runnervmtai0g" time="7.712">
+  <properties/>
+  <testcase name="consoleStopLaterPausesThenBeltRestartResumes" classname="fr.tapissync.RunSessionTest" time="7.435"/>
+  <testcase name="stopSignalDuringStartupIsIgnored" classname="fr.tapissync.RunSessionTest" time="0.044"/>
+  <testcase name="treadmillStartSpeedIsNotTakenAsManualChange" classname="fr.tapissync.RunSessionTest" time="0.04"/>
+  <testcase name="consoleSpeedChangeLaterIsKeptForTheStep" classname="fr.tapissync.RunSessionTest" time="0.044"/>
+  <testcase name="appPauseIsNotUndoneByBeltData" classname="fr.tapissync.RunSessionTest" time="0.044"/>
+  <testcase name="safetyKeyAlwaysPauses" classname="fr.tapissync.RunSessionTest" time="0.061"/>
+  <testcase name="startRestoreIsSentOnlyOnce" classname="fr.tapissync.RunSessionTest" time="0.041"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="fr.tapissync.ScreensTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-10-27T08:07:46.630Z" hostname="runnervmtai0g" time="10.791">
+  <properties/>
+  <testcase name="tablette" classname="fr.tapissync.ScreensTest" time="8.111"/>
+  <testcase name="telephone" classname="fr.tapissync.ScreensTest" time="2.016"/>
+  <testcase name="bandeauTablette" classname="fr.tapissync.ScreensTest" time="0.303"/>
+  <testcase name="bandeauTelephone" classname="fr.tapissync.ScreensTest" time="0.361"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

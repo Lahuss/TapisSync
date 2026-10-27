@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="fr.tapissync.EngineTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-27T08:07:38.675Z" hostname="runnervmtai0g" time="0.086">
+  <properties/>
+  <testcase name="manualStepWaitsForSkipThenFinishes" classname="fr.tapissync.EngineTest" time="0.023"/>
+  <testcase name="skipWhilePausedKeepsPauseAccounting" classname="fr.tapissync.EngineTest" time="0.002"/>
+  <testcase name="timeStepAdvancesExactlyWithCountdownAndPause" classname="fr.tapissync.EngineTest" time="0.0"/>
+  <testcase name="distanceStepUsesTreadmillDistanceAndAdjustResets" classname="fr.tapissync.EngineTest" time="0.0"/>
+  <testcase name="spokenAnnouncements" classname="fr.tapissync.EngineTest" time="0.058"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
