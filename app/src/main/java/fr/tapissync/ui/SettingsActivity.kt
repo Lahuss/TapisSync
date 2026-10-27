@@ -35,7 +35,6 @@ class SettingsActivity : Activity() {
     private lateinit var endKmh: EditText
     private lateinit var incline: EditText
     private lateinit var bar: Switch
-    private lateinit var lock: Switch
     private lateinit var overlayStatus: Ui.StatusLine
     private lateinit var overlayButton: android.widget.Button
     private lateinit var voice: Switch
@@ -125,17 +124,6 @@ class SettingsActivity : Activity() {
         c7.addSpaced(
             Ui.text(this, "Si l'option est grisée : Paramètres › Applis › TapisSync › menu ⋮ › Autoriser les paramètres restreints, puis réessaie.", 14f, Ui.MUTED),
             this, 6,
-        )
-        lock = Switch(this).apply {
-            text = "Seul TapisSync règle la vitesse"
-            setTextColor(Ui.TEXT)
-            textSize = 16f
-            isChecked = prefs.lockSpeed
-        }
-        c7.addSpaced(lock, this, 20)
-        c7.addSpaced(
-            Ui.text(this, "Si la vitesse est changée par la console ou une autre appli comme Kinomap, TapisSync remet celle de l'étape. Ajuste-la avec les boutons ± de TapisSync. Désactive-le pour garder les changements faits sur la console.", 14f, Ui.MUTED),
-            this, 4,
         )
         root.addSpaced(c7, this, 12)
 
@@ -236,7 +224,6 @@ class SettingsActivity : Activity() {
         prefs.voiceEnabled = voice.isChecked
         prefs.beepEnabled = beep.isChecked
         prefs.barEnabled = bar.isChecked
-        prefs.lockSpeed = lock.isChecked
         return true
     }
 }

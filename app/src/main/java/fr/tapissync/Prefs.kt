@@ -60,11 +60,6 @@ class Prefs(context: Context) {
         get() = p.getBoolean("overlay_prompted", false)
         set(v) = p.edit().putBoolean("overlay_prompted", v).apply()
 
-    /** Seul TapisSync règle la vitesse : un changement venu d'ailleurs est annulé. */
-    var lockSpeed: Boolean
-        get() = p.getBoolean("lock_speed", true)
-        set(v) = p.edit().putBoolean("lock_speed", v).apply()
-
     var voiceEnabled: Boolean
         get() = p.getBoolean("voice", true)
         set(v) = p.edit().putBoolean("voice", v).apply()

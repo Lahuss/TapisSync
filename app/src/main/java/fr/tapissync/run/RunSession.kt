@@ -61,7 +61,8 @@ class RunSession(
     /** Vrai si la pause vient du tapis (console, clé) et non du bouton Pause de l'appli. */
     private var pausedByTreadmill = false
     private var beltMovingSinceMs = 0L
-    private var restorePending = false
+    /** Vitesse de l'étape déjà renvoyée une fois depuis le dernier départ ou la dernière reprise. */
+    private var startRestoreDone = false
 
     private val tick = object : Runnable {
         override fun run() {
@@ -89,6 +90,7 @@ class RunSession(
         if (!incline.isNaN()) tm.setIncline(incline)
         tm.start()
         lastStartCommandMs = SystemClock.elapsedRealtime()
+        startRestoreDone = false
         handle(engine.start())
     }
 
@@ -107,6 +109,7 @@ class RunSession(
         pausedByTreadmill = false
         tm.start()
         lastStartCommandMs = SystemClock.elapsedRealtime()
+        startRestoreDone = false
         sendTarget()
         speaker.say("Reprise, ${WorkoutEngine.spokenNumber(engine.targetKmh())} kilomètres heure.")
         update()
@@ -174,30 +177,29 @@ class RunSession(
     private var retriedToken = -1
 
     /**
-     * Envoie la vitesse cible, puis vérifie 5 s et 11 s plus tard que le tapis l'a bien prise
-     * (le temps d'accélérer). Sinon on la renvoie, et on relance la bande si elle est arrêtée.
+     * Envoie la vitesse cible (le tapis bipe à chaque consigne reçue), puis vérifie une seule
+     * fois, 10 s plus tard, que le tapis l'a prise. Sinon on la renvoie une fois.
      */
     private fun sendTarget() {
         if (engine.phase != WorkoutEngine.Phase.RUNNING) return
         tm.setSpeed(engine.targetKmh())
         lastCommandMs = SystemClock.elapsedRealtime()
         val token = ++checkToken
-        main.postDelayed({ verifySpeed(token, last = false) }, 5000)
-        main.postDelayed({ verifySpeed(token, last = true) }, 11000)
+        main.postDelayed({ verifySpeed(token) }, 10_000)
     }
 
-    private fun verifySpeed(token: Int, last: Boolean) {
+    private fun verifySpeed(token: Int) {
         if (released || token != checkToken || engine.phase != WorkoutEngine.Phase.RUNNING) return
         val actual = lastTreadmillSpeed ?: return
         val target = engine.targetKmh()
         if (abs(actual - target) <= 0.4) return
         AppLog.add("Séance", "Tapis à ${Format.kmh(actual)} km/h au lieu de ${Format.kmh(target)} : renvoi de la consigne")
-        if (actual < 0.5) tm.start()
-        tm.setSpeed(target)
-        lastCommandMs = SystemClock.elapsedRealtime()
-        if (last && actual < 0.5) {
+        if (actual < 0.5) {
+            tm.start()
             showNotice("Le tapis ne démarre pas : appuie sur Start sur la console.", 10000)
         }
+        tm.setSpeed(target)
+        lastCommandMs = SystemClock.elapsedRealtime()
     }
 
     private fun update() = listeners.forEach { it.onUpdate() }
@@ -285,7 +287,10 @@ class RunSession(
                 val now = SystemClock.elapsedRealtime()
                 if (now - lastStartCommandMs < START_GRACE_MS) {
                     // Juste après le départ, le tapis impose sa vitesse de démarrage (1 km/h) :
-                    // ce n'est pas un réglage fait à la main, on remet la vitesse de l'étape.
+                    // ce n'est pas un réglage fait à la main, on remet la vitesse de l'étape,
+                    // une seule fois pour ne pas faire biper le tapis en boucle.
+                    if (startRestoreDone) return
+                    startRestoreDone = true
                     AppLog.add("Séance", "Le tapis passe à ${Format.kmh(event.kmh)} km/h au démarrage : on remet ${Format.kmh(engine.targetKmh())} km/h")
                     main.postDelayed({
                         if (!released && engine.phase == WorkoutEngine.Phase.RUNNING) {
@@ -295,10 +300,7 @@ class RunSession(
                     }, 800)
                     return
                 }
-                if (prefs.lockSpeed) {
-                    // Seul TapisSync règle la vitesse : on remet celle de l'étape.
-                    restoreTarget(event.kmh)
-                } else if (now - lastCommandMs > 2500) {
+                if (now - lastCommandMs > 2500) {
                     // Changement fait sur la console : on le respecte jusqu'à la fin de l'étape.
                     engine.acceptManualTarget(event.kmh)
                     showNotice("Vitesse changée sur le tapis : ${Format.kmh(event.kmh)} km/h pour cette étape.")
@@ -308,26 +310,12 @@ class RunSession(
         }
     }
 
-    /** Remet la vitesse de l'étape après un changement fait hors de TapisSync (console, Kinomap…). */
-    private fun restoreTarget(changedTo: Double) {
-        if (restorePending) return
-        restorePending = true
-        AppLog.add("Séance", "Vitesse changée hors de TapisSync (${Format.kmh(changedTo)} km/h) : retour à ${Format.kmh(engine.targetKmh())} km/h")
-        showNotice("Vitesse changée hors de TapisSync : retour à ${Format.kmh(engine.targetKmh())} km/h. Utilise les boutons ± pour l'ajuster.")
-        main.postDelayed({
-            restorePending = false
-            if (!released && engine.phase == WorkoutEngine.Phase.RUNNING) {
-                tm.setSpeed(engine.targetKmh())
-                lastCommandMs = SystemClock.elapsedRealtime()
-            }
-        }, 800)
-    }
-
     private fun resumeFromTreadmill() {
         engine.resume()
         pausedByTreadmill = false
         beltMovingSinceMs = 0L
         lastStartCommandMs = SystemClock.elapsedRealtime()
+        startRestoreDone = false
         AppLog.add("Séance", "Reprise depuis la console du tapis")
         sendTarget()
         speaker.say("Reprise.")
