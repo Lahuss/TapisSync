@@ -55,6 +55,11 @@ class Prefs(context: Context) {
         get() = p.getBoolean("bar", true)
         set(v) = p.edit().putBoolean("bar", v).apply()
 
+    /** Distance de l'onglet du bandeau rangé au bord droit (px), -1 = position par défaut. */
+    var tabOffset: Int
+        get() = p.getInt("tab_offset", -1)
+        set(v) = p.edit().putInt("tab_offset", v).apply()
+
     /** Demande d'autorisation du bandeau déjà proposée une fois. */
     var overlayPrompted: Boolean
         get() = p.getBoolean("overlay_prompted", false)

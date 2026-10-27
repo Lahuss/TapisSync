@@ -25,7 +25,8 @@ import fr.tapissync.workout.Format
 /**
  * Bandeau de séance affiché en bas de l'écran, par-dessus les autres applis
  * (Kinomap, Netflix…), quand l'écran de séance n'est pas au premier plan.
- * Le reste de l'écran reste utilisable.
+ * Il peut être rangé : il ne reste alors qu'un petit onglet orange avec la vitesse,
+ * qui le fait revenir d'un appui et qu'on peut faire glisser le long du bord bas.
  */
 class RunBar(private val app: App) : RunSession.Listener {
 
@@ -37,52 +38,116 @@ class RunBar(private val app: App) : RunSession.Listener {
         }
 
     private val wm = app.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    private val themed = ContextThemeWrapper(app, R.style.AppTheme)
     private var view: BarView? = null
+    private var tab: TabView? = null
+    private var tabParams: WindowManager.LayoutParams? = null
     private var attached: RunSession? = null
+
+    /** Bandeau rangé (seul l'onglet est visible). Revient à faux à chaque nouvelle séance. */
+    private var tucked = false
+    private var animating = false
 
     fun canDraw(): Boolean = Settings.canDrawOverlays(app)
 
-    /** Affiche ou masque le bandeau selon la séance, l'écran visible et les réglages. */
+    /** Affiche le bandeau ou l'onglet selon la séance, l'écran visible et les réglages. */
     fun refresh() {
         val s = app.session
-        if (s != null && !activityVisible && app.prefs.barEnabled && canDraw()) show(s) else hide()
+        if (s == null || activityVisible || !app.prefs.barEnabled || !canDraw()) {
+            removeAll()
+            return
+        }
+        attach(s)
+        if (animating) return
+        if (tucked) showTab() else showBar(animate = false)
     }
 
-    private fun show(s: RunSession) {
+    private fun attach(s: RunSession) {
+        if (attached === s) return
+        attached?.listeners?.remove(this)
+        s.listeners.add(this)
+        attached = s
+        tucked = false
+        view?.bind(s)
+    }
+
+    private fun overlayParams(w: Int, h: Int, gravity: Int) = WindowManager.LayoutParams(
+        w, h,
+        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+        // Ne prend ni le clavier ni les touches hors de la fenêtre : l'appli dessous reste utilisable.
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+        PixelFormat.TRANSLUCENT,
+    ).apply {
+        this.gravity = gravity
+        title = "TapisSync"
+    }
+
+    private fun showBar(animate: Boolean) {
+        removeTab()
         var v = view
         if (v == null) {
-            v = BarView(ContextThemeWrapper(app, R.style.AppTheme), onOpen = ::openRunScreen)
-            val lp = WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                // Ne prend ni le clavier ni les touches hors du bandeau : l'appli dessous reste utilisable.
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-                PixelFormat.TRANSLUCENT,
-            ).apply {
-                gravity = Gravity.BOTTOM
-                title = "TapisSync"
-            }
+            v = BarView(themed, onOpen = ::openRunScreen, onHide = ::tuck)
             try {
-                wm.addView(v, lp)
+                wm.addView(v, overlayParams(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
             } catch (e: Exception) {
                 AppLog.add("Bandeau", "Affichage impossible : ${e.message}")
                 return
             }
             view = v
-        }
-        if (attached !== s) {
-            attached?.listeners?.remove(this)
-            s.listeners.add(this)
-            attached = s
-            v.bind(s)
+            attached?.let { v.bind(it) }
+            if (animate) {
+                // Le bandeau remonte depuis le bord de l'écran.
+                v.translationY = Ui.dp(app, 160).toFloat()
+                animating = true
+                v.post {
+                    v.translationY = v.height.toFloat()
+                    v.animate().translationY(0f).setDuration(200).withEndAction { animating = false }.start()
+                }
+            }
         }
         v.update()
     }
 
-    private fun hide() {
-        attached?.listeners?.remove(this)
-        attached = null
+    private fun showTab() {
+        removeBar()
+        var t = tab
+        if (t == null) {
+            t = TabView(themed, onTap = { untuck() }, onMoved = { x -> app.prefs.tabOffset = x })
+            val lp = overlayParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END)
+            lp.x = app.prefs.tabOffset.takeIf { it >= 0 } ?: Ui.dp(app, 24)
+            t.attachWindow(wm, lp)
+            try {
+                wm.addView(t, lp)
+            } catch (e: Exception) {
+                AppLog.add("Bandeau", "Onglet impossible : ${e.message}")
+                return
+            }
+            tab = t
+            tabParams = lp
+        }
+        attached?.let { t.update(it) }
+    }
+
+    /** Range le bandeau : il descend hors de l'écran et laisse place à l'onglet. */
+    private fun tuck() {
+        val v = view ?: return
+        if (animating) return
+        tucked = true
+        animating = true
+        v.animate().translationY(v.height.toFloat()).setDuration(180).withEndAction {
+            animating = false
+            refresh()
+        }.start()
+    }
+
+    private fun untuck() {
+        if (animating) return
+        tucked = false
+        if (app.session == null || activityVisible) return
+        showBar(animate = true)
+    }
+
+    private fun removeBar() {
         val v = view ?: return
         view = null
         try {
@@ -91,8 +156,37 @@ class RunBar(private val app: App) : RunSession.Listener {
         }
     }
 
+    private fun removeTab() {
+        val t = tab ?: return
+        tab = null
+        tabParams = null
+        try {
+            wm.removeView(t)
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun removeAll() {
+        attached?.listeners?.remove(this)
+        attached = null
+        animating = false
+        removeBar()
+        removeTab()
+    }
+
     override fun onUpdate() {
-        if (app.session == null) hide() else view?.update()
+        val s = app.session
+        if (s == null) {
+            removeAll()
+            return
+        }
+        // Séance terminée : le bandeau revient pour afficher le bilan.
+        if (tucked && s.engine.phase == Phase.FINISHED) {
+            untuck()
+            return
+        }
+        view?.update()
+        tab?.update(s)
     }
 
     private fun openRunScreen() {
@@ -103,10 +197,95 @@ class RunBar(private val app: App) : RunSession.Listener {
 }
 
 /**
+ * Onglet orange affiché quand le bandeau est rangé : vitesse cible et flèche.
+ * Un appui fait revenir le bandeau ; un glissement le déplace le long du bord bas.
+ */
+class TabView(
+    ctx: Context,
+    private val onTap: () -> Unit,
+    private val onMoved: (Int) -> Unit,
+) : LinearLayout(ctx) {
+
+    private val speed: TextView
+    private var wm: WindowManager? = null
+    private var lp: WindowManager.LayoutParams? = null
+
+    init {
+        orientation = HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        background = Ui.ChamferDrawable(Ui.ACCENT, null, Ui.dp(ctx, 10).toFloat(), 0f)
+        val h = Ui.dp(ctx, 16)
+        setPadding(h, Ui.dp(ctx, 6), h, Ui.dp(ctx, 6))
+        minimumHeight = Ui.dp(ctx, 48)
+        contentDescription = "Afficher le bandeau de séance"
+        speed = Ui.display(ctx, "--", 26f, Ui.ON_ACCENT)
+        addView(speed)
+        addView(Ui.label(ctx, " km/h", 15f, Ui.ON_ACCENT))
+        addView(Ui.label(ctx, "▲", 18f, Ui.ON_ACCENT).apply { setPadding(Ui.dp(ctx, 12), 0, 0, 0) })
+    }
+
+    fun attachWindow(wm: WindowManager, lp: WindowManager.LayoutParams) {
+        this.wm = wm
+        this.lp = lp
+    }
+
+    fun update(s: RunSession) {
+        val e = s.engine
+        speed.text = if (e.phase == Phase.FINISHED) "--" else Format.kmh(e.targetKmh())
+    }
+
+    private var downRawX = 0f
+    private var startX = 0
+    private var dragging = false
+
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    override fun onTouchEvent(ev: android.view.MotionEvent): Boolean {
+        val params = lp
+        when (ev.actionMasked) {
+            android.view.MotionEvent.ACTION_DOWN -> {
+                downRawX = ev.rawX
+                startX = params?.x ?: 0
+                dragging = false
+                alpha = 0.85f
+            }
+            android.view.MotionEvent.ACTION_MOVE -> {
+                val dx = ev.rawX - downRawX
+                if (!dragging && kotlin.math.abs(dx) > Ui.dp(context, 8)) dragging = true
+                if (dragging && params != null) {
+                    // Gravité à droite : x se compte depuis le bord droit.
+                    val maxX = (resources.displayMetrics.widthPixels - width).coerceAtLeast(0)
+                    params.x = (startX - dx.toInt()).coerceIn(0, maxX)
+                    try {
+                        wm?.updateViewLayout(this, params)
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+            android.view.MotionEvent.ACTION_UP -> {
+                alpha = 1f
+                if (dragging) params?.let { onMoved(it.x) } else performClick()
+            }
+            android.view.MotionEvent.ACTION_CANCEL -> alpha = 1f
+        }
+        return true
+    }
+
+    override fun performClick(): Boolean {
+        super.performClick()
+        onTap()
+        return true
+    }
+}
+
+/**
  * Contenu du bandeau. Séparé de la fenêtre pour pouvoir le dessiner dans les tests.
  * Étape, vitesse, temps restant, profil LED, boutons, et flèche ▲ vers le plein écran.
  */
-class BarView(ctx: Context, private val onOpen: () -> Unit) : LinearLayout(ctx) {
+class BarView(
+    ctx: Context,
+    private val onOpen: () -> Unit,
+    private val onHide: () -> Unit = {},
+) : LinearLayout(ctx) {
 
     private var session: RunSession? = null
     private val wide = ctx.resources.configuration.screenWidthDp >= 720
@@ -123,6 +302,7 @@ class BarView(ctx: Context, private val onOpen: () -> Unit) : LinearLayout(ctx) 
     private val main: Button
     private val next: Button
     private val expand: Button
+    private val hide: Button
     private val stepBox: LinearLayout
     private val content: LinearLayout
 
@@ -202,7 +382,10 @@ class BarView(ctx: Context, private val onOpen: () -> Unit) : LinearLayout(ctx) 
             contentDescription = "Passer en plein écran"
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
         }
-        val buttons = listOf(minus to 1f, plus to 1f, main to 1.4f, next to 1.2f, expand to 0.9f)
+        hide = small(Ui.button(ctx, "Masquer", primary = false) { onHide() }).apply {
+            contentDescription = "Ranger le bandeau"
+        }
+        val buttons = listOf(minus to 1f, plus to 1f, main to 1.4f, next to 1.2f, hide to 1.3f, expand to 0.9f)
         if (wide) {
             for ((b, _) in buttons) {
                 content.addView(b, Ui.lp(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
@@ -231,6 +414,19 @@ class BarView(ctx: Context, private val onOpen: () -> Unit) : LinearLayout(ctx) 
                 weight = 1f
             }
         }
+    }
+
+    private var downY = 0f
+
+    /** Glisser le bandeau vers le bas le range (les boutons gardent leurs propres appuis). */
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    override fun onTouchEvent(ev: android.view.MotionEvent): Boolean {
+        when (ev.actionMasked) {
+            android.view.MotionEvent.ACTION_DOWN -> downY = ev.rawY
+            android.view.MotionEvent.ACTION_UP ->
+                if (ev.rawY - downY > Ui.dp(context, 40)) onHide()
+        }
+        return true
     }
 
     private fun TextView.singleLine() {

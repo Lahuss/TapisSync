@@ -14,6 +14,7 @@ import fr.tapissync.garmin.WorkoutSummary
 import fr.tapissync.run.RunSession
 import fr.tapissync.ui.BarView
 import fr.tapissync.ui.MainActivity
+import fr.tapissync.ui.TabView
 import fr.tapissync.ui.PreviewActivity
 import fr.tapissync.ui.RunActivity
 import fr.tapissync.ui.SettingsActivity
@@ -150,6 +151,24 @@ class ScreensTest {
         c.restore()
         val dir = File("build/screens").apply { mkdirs() }
         FileOutputStream(File(dir, "$name.png")).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+
+        // Même écran avec le bandeau rangé : seul l'onglet orange reste, en bas à droite.
+        val tab = TabView(ContextThemeWrapper(app, R.style.AppTheme), onTap = {}, onMoved = {})
+        tab.update(s)
+        tab.measure(
+            MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED),
+            MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED),
+        )
+        tab.layout(0, 0, tab.measuredWidth, tab.measuredHeight)
+        val bmp2 = Bitmap.createBitmap(dm.widthPixels, dm.heightPixels, Bitmap.Config.ARGB_8888)
+        val c2 = Canvas(bmp2)
+        c2.drawRect(0f, 0f, dm.widthPixels.toFloat(), dm.heightPixels.toFloat(), p)
+        c2.drawText("Vidéo Kinomap ou Netflix", dm.density * 32, dm.density * 56, label)
+        c2.save()
+        c2.translate(dm.widthPixels - tab.measuredWidth - dm.density * 24, (dm.heightPixels - tab.measuredHeight).toFloat())
+        tab.draw(c2)
+        c2.restore()
+        FileOutputStream(File(dir, "$name-range.png")).use { bmp2.compress(Bitmap.CompressFormat.PNG, 100, it) }
         s.release()
     }
 
