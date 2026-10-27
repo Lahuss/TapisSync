@@ -128,7 +128,7 @@ class ScreensTest {
             dist += if (warm) 2 else 3
             s.onData(Ftms.TreadmillData(speedKmh = if (warm) 9.0 else 12.6, distanceM = dist))
         }
-        val bar = BarView(ContextThemeWrapper(app, R.style.AppTheme)) {}
+        val bar = BarView(ContextThemeWrapper(app, R.style.AppTheme), onOpen = {})
         bar.bind(s)
         val dm = app.resources.displayMetrics
         bar.measure(
